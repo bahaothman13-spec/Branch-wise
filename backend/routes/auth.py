@@ -47,3 +47,45 @@ def register():
     return jsonify({
         "message": "Input is valid, but registration is pending database integration."
     }), 501
+
+
+@auth_bp.post("/login")
+def login():
+    """Validate login data until database authentication is implemented."""
+    if not request.is_json:
+        return jsonify({"error": "Request body must be JSON."}), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+
+    errors = {}
+    for field in ("email", "password"):
+        if field not in data:
+            errors[field] = "This field is required."
+            continue
+
+        value = data.get(field)
+        if not isinstance(value, str):
+            errors[field] = "Must be a string."
+        elif not value.strip():
+            errors[field] = "This field is required."
+
+    email = data.get("email")
+    if isinstance(email, str) and email.strip() and not EMAIL_PATTERN.fullmatch(email.strip()):
+        errors["email"] = "Enter a valid email address."
+
+    if errors:
+        return jsonify({"errors": errors}), 400
+
+    return jsonify({
+        "message": "Database authentication is not implemented yet."
+    }), 501
+
+
+@auth_bp.post("/logout")
+def logout():
+    """Prepare the logout endpoint until session management is implemented."""
+    return jsonify({
+        "message": "Logout is not available until session management is implemented."
+    }), 501
