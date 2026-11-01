@@ -86,6 +86,45 @@ def test_logout_returns_501_until_sessions_are_implemented(client):
     assert response.status_code == 501
 
 
+def test_branch_creation_with_valid_input_returns_501(client):
+    response = client.post(
+        "/api/branches",
+        json={
+            "name": "Main Branch",
+            "address": "12 Main Street",
+            "phone": "+962 6 555 0100",
+            "notes": "Near the city center",
+        },
+    )
+
+    assert response.status_code == 501
+    assert "authentication" in response.get_json()["message"]
+
+
+def test_branch_creation_without_optional_fields_returns_501(client):
+    response = client.post("/api/branches", json={"name": "Main Branch"})
+
+    assert response.status_code == 501
+
+
+@pytest.mark.parametrize(
+    "branch_data",
+    [
+        {},
+        {"name": "   "},
+        {"name": 123},
+        {"name": "Main Branch", "address": 12},
+        {"name": "Main Branch", "phone": None},
+        {"name": "Main Branch", "notes": ["note"]},
+    ],
+)
+def test_branch_creation_with_invalid_input_returns_400(client, branch_data):
+    response = client.post("/api/branches", json=branch_data)
+
+    assert response.status_code == 400
+    assert "errors" in response.get_json()
+
+
 def test_user_creation_with_valid_input_returns_501(client):
     response = client.post(
         "/api/users",
