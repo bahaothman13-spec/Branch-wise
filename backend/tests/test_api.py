@@ -107,6 +107,57 @@ def test_branch_creation_without_optional_fields_returns_501(client):
     assert response.status_code == 501
 
 
+def test_branch_list_returns_501_until_authentication_and_database_are_ready(client):
+    response = client.get("/api/branches")
+
+    assert response.status_code == 501
+    assert "authentication" in response.get_json()["message"]
+
+
+def test_branch_details_with_positive_id_returns_501(client):
+    response = client.get("/api/branches/1")
+
+    assert response.status_code == 501
+
+
+@pytest.mark.parametrize("branch_id", ["0", "abc", "-1"])
+def test_branch_details_with_invalid_id_returns_400(client, branch_id):
+    response = client.get(f"/api/branches/{branch_id}")
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"]["branch_id"] == "Must be a positive integer."
+
+
+def test_branch_update_with_valid_data_returns_501(client):
+    response = client.patch(
+        "/api/branches/1",
+        json={"name": "Updated Branch", "address": "New address", "notes": "Updated"},
+    )
+
+    assert response.status_code == 501
+    assert "authentication" in response.get_json()["message"]
+
+
+@pytest.mark.parametrize(
+    "branch_id,branch_data",
+    [
+        ("0", {"name": "Updated Branch"}),
+        ("abc", {"name": "Updated Branch"}),
+        ("1", {}),
+        ("1", {"name": "   "}),
+        ("1", {"name": 123}),
+        ("1", {"phone": None}),
+        ("1", {"notes": ["note"]}),
+        ("1", {"business_id": 10}),
+    ],
+)
+def test_branch_update_with_invalid_data_returns_400(client, branch_id, branch_data):
+    response = client.patch(f"/api/branches/{branch_id}", json=branch_data)
+
+    assert response.status_code == 400
+    assert "errors" in response.get_json()
+
+
 @pytest.mark.parametrize(
     "branch_data",
     [
