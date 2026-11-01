@@ -120,6 +120,21 @@ def test_branch_details_with_positive_id_returns_501(client):
     assert response.status_code == 501
 
 
+def test_branch_deactivation_with_positive_id_returns_501(client):
+    response = client.patch("/api/branches/1/deactivate")
+
+    assert response.status_code == 501
+    assert "authentication" in response.get_json()["message"]
+
+
+@pytest.mark.parametrize("branch_id", ["0", "abc", "-1"])
+def test_branch_deactivation_with_invalid_id_returns_400(client, branch_id):
+    response = client.patch(f"/api/branches/{branch_id}/deactivate")
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"]["branch_id"] == "Must be a positive integer."
+
+
 @pytest.mark.parametrize("branch_id", ["0", "abc", "-1"])
 def test_branch_details_with_invalid_id_returns_400(client, branch_id):
     response = client.get(f"/api/branches/{branch_id}")

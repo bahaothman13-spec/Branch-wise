@@ -63,6 +63,19 @@ def get_branch(branch_id):
     return _branches_not_ready("details")
 
 
+@branches_bp.patch("/<branch_id>/deactivate")
+def deactivate_branch(branch_id):
+    """Validate a branch deactivation request until auth and DB are ready."""
+    if _validate_branch_id(branch_id) is None:
+        return jsonify({"errors": {"branch_id": "Must be a positive integer."}}), 400
+
+    # When implemented, require an authenticated Owner, load the branch within
+    # that Owner's business, and set is_active to false. Keep its historical
+    # sales, purchases, and inventory records; reject new sales and stock
+    # transfers for inactive branches.
+    return _branches_not_ready("deactivation")
+
+
 @branches_bp.patch("/<branch_id>")
 def update_branch(branch_id):
     """Validate editable branch fields until auth and database support exist."""
