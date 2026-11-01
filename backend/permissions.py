@@ -6,14 +6,19 @@ and build ``ResourceScope`` from the target resource loaded by the server.
 Never build either object from role, business_id, or branch_id values supplied
 by the client. The requested permission should also be a server-defined value.
 
-Employee operation grants are deliberately not defined here. The team must
-decide which operations employees may perform before assigning any grants.
-Until those decisions are made, an empty ``permissions`` set denies access.
+Permission grants are supplied by trusted server-side policy or stored data.
+This module applies the common business and branch scope, plus the role limits
+for the approval operations defined below. It does not grant permissions by
+itself.
 """
 
 from dataclasses import dataclass
 from enum import Enum
 from typing import FrozenSet
+
+
+PRODUCT_CATALOG_APPROVAL = "product_catalog:approve"
+SALE_CANCELLATION_APPROVAL = "sale_cancellation:approve"
 
 
 class Role(str, Enum):
@@ -22,6 +27,14 @@ class Role(str, Enum):
     OWNER = "Owner"
     BRANCH_MANAGER = "Branch Manager"
     EMPLOYEE = "Employee"
+
+
+_ROLE_LIMITED_PERMISSIONS = {
+    PRODUCT_CATALOG_APPROVAL: frozenset({Role.OWNER}),
+    SALE_CANCELLATION_APPROVAL: frozenset(
+        {Role.OWNER, Role.BRANCH_MANAGER}
+    ),
+}
 
 
 @dataclass(frozen=True)
@@ -68,6 +81,10 @@ def has_permission(
     if principal.role not in (Role.OWNER, Role.BRANCH_MANAGER, Role.EMPLOYEE):
         return False
 
+    allowed_roles = _ROLE_LIMITED_PERMISSIONS.get(required_permission)
+    if allowed_roles is not None and principal.role not in allowed_roles:
+        return False
+
     if not required_permission or required_permission not in principal.permissions:
         return False
 
@@ -88,9 +105,3 @@ def has_permission(
         )
 
     return False
-
-
-# Before enabling Employee operations, the team must decide:
-# 1. Which operation names Employees may receive (the list is intentionally empty here).
-# 2. Whether grants are shared by all Employees or assigned per Employee.
-# 3. Whether permissions need finer distinctions, such as viewing versus editing.
