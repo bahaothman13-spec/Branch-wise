@@ -97,3 +97,49 @@ def update_user_status(user_id):
             "and database integration are implemented."
         )
     }), 501
+
+
+@users_bp.patch("/users/me/password")
+def change_my_password():
+    """Validate password-change data until authentication and database support exist."""
+    if not request.is_json:
+        return jsonify({"error": "Request body must be JSON."}), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+
+    errors = {}
+    password_fields = ("current_password", "new_password", "confirm_password")
+
+    for field in password_fields:
+        if field not in data:
+            errors[field] = "This field is required."
+            continue
+
+        value = data[field]
+        if not isinstance(value, str):
+            errors[field] = "Must be a string."
+        elif not value.strip():
+            errors[field] = "This field is required."
+
+    new_password = data.get("new_password")
+    if isinstance(new_password, str) and new_password.strip():
+        if len(new_password) < MIN_PASSWORD_LENGTH:
+            errors["new_password"] = (
+                f"Password must be at least {MIN_PASSWORD_LENGTH} characters long."
+            )
+
+        confirm_password = data.get("confirm_password")
+        if isinstance(confirm_password, str) and confirm_password != new_password:
+            errors["confirm_password"] = "Passwords do not match."
+
+    if errors:
+        return jsonify({"errors": errors}), 400
+
+    return jsonify({
+        "message": (
+            "Input is valid, but changing passwords is unavailable until authentication "
+            "and database integration are implemented."
+        )
+    }), 501
