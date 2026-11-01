@@ -1,19 +1,81 @@
-"""Unit tests for BranchWise's isolated role and scope checks."""
+"""Tests for the approved BranchWise role matrix and resource scope rules."""
 
 import pytest
 
 from permissions import (
     AuthenticatedPrincipal,
-    PRODUCT_CATALOG_APPROVAL,
+    ROLE_PERMISSIONS,
     ResourceScope,
     Role,
-    SALE_CANCELLATION_APPROVAL,
     has_permission,
 )
 
 
-PERMISSION_A = "sample:operation-a"
-PERMISSION_B = "sample:operation-b"
+EXPECTED_ROLE_PERMISSIONS = {
+    Role.OWNER: {
+        "dashboard:view",
+        "products:view",
+        "product_catalog:manage",
+        "product_catalog:approve",
+        "inventory:view",
+        "inventory:adjust",
+        "sales:record",
+        "sales:view",
+        "sale_cancellation:approve",
+        "users:manage",
+        "branches:manage",
+        "business_settings:manage",
+        "suppliers:view",
+        "suppliers:manage",
+        "purchases:manage",
+        "transfers:request",
+        "transfers:approve_source",
+        "transfers:dispatch",
+        "transfers:confirm_receipt",
+        "returns:record",
+        "returns:inspect",
+        "reports:view_business",
+        "ai:recommendations",
+        "ai:assistant",
+        "ai:decision_log",
+        "password:change_self",
+    },
+    Role.BRANCH_MANAGER: {
+        "dashboard:view",
+        "products:view",
+        "product_request:review",
+        "product_request:comment",
+        "inventory:view",
+        "inventory:adjust",
+        "sales:record",
+        "sales:view",
+        "sale_cancellation:approve",
+        "suppliers:view",
+        "purchases:manage_authorized",
+        "transfers:request",
+        "transfers:approve_source",
+        "transfers:dispatch",
+        "transfers:confirm_receipt",
+        "returns:record",
+        "returns:inspect",
+        "reports:view_branch",
+        "ai:recommendations",
+        "ai:assistant",
+        "ai:decision_log",
+        "password:change_self",
+    },
+    Role.EMPLOYEE: {
+        "dashboard:view",
+        "products:view",
+        "inventory:view",
+        "sales:record",
+        "sales:view_authorized",
+        "product_request:submit",
+        "sale_cancellation:request",
+        "returns:record",
+        "password:change_self",
+    },
+}
 
 
 def make_principal(role, business_id=10, branch_id=None, permissions=None):
@@ -25,158 +87,156 @@ def make_principal(role, business_id=10, branch_id=None, permissions=None):
     )
 
 
-def test_owner_can_access_granted_resource_in_another_branch_of_own_business():
-    owner = make_principal(Role.OWNER, permissions={PERMISSION_A})
-    resource = ResourceScope(business_id=10, branch_id=22)
-
-    assert has_permission(owner, PERMISSION_A, resource)
-
-
-def test_owner_cannot_access_resource_in_another_business():
-    owner = make_principal(Role.OWNER, permissions={PERMISSION_A})
-    other_business_resource = ResourceScope(business_id=99, branch_id=22)
-
-    assert not has_permission(owner, PERMISSION_A, other_business_resource)
-
-
-def test_branch_manager_can_access_granted_resource_in_assigned_branch():
-    manager = make_principal(
-        Role.BRANCH_MANAGER,
-        branch_id=22,
-        permissions={PERMISSION_A},
-    )
-    resource = ResourceScope(business_id=10, branch_id=22)
-
-    assert has_permission(manager, PERMISSION_A, resource)
-
-
-def test_branch_manager_cannot_access_another_branch():
-    manager = make_principal(
-        Role.BRANCH_MANAGER,
-        branch_id=22,
-        permissions={PERMISSION_A},
-    )
-    other_branch_resource = ResourceScope(business_id=10, branch_id=23)
-
-    assert not has_permission(manager, PERMISSION_A, other_branch_resource)
-
-
-def test_branch_manager_cannot_access_another_business_even_if_branch_id_matches():
-    manager = make_principal(
-        Role.BRANCH_MANAGER,
-        branch_id=22,
-        permissions={PERMISSION_A},
-    )
-    other_business_resource = ResourceScope(business_id=99, branch_id=22)
-
-    assert not has_permission(manager, PERMISSION_A, other_business_resource)
-
-
-def test_employee_can_access_only_granted_operation_in_assigned_branch():
-    employee = make_principal(
-        Role.EMPLOYEE,
-        branch_id=22,
-        permissions={PERMISSION_A},
-    )
-    resource = ResourceScope(business_id=10, branch_id=22)
-
-    assert has_permission(employee, PERMISSION_A, resource)
-    assert not has_permission(employee, PERMISSION_B, resource)
-
-
-def test_employee_cannot_access_another_branch():
-    employee = make_principal(
-        Role.EMPLOYEE,
-        branch_id=22,
-        permissions={PERMISSION_A},
-    )
-    other_branch_resource = ResourceScope(business_id=10, branch_id=23)
-
-    assert not has_permission(employee, PERMISSION_A, other_branch_resource)
-
-
-def test_user_without_an_assigned_branch_cannot_access_branch_resource():
-    employee = make_principal(Role.EMPLOYEE, permissions={PERMISSION_A})
-    resource = ResourceScope(business_id=10, branch_id=22)
-
-    assert not has_permission(employee, PERMISSION_A, resource)
-
-
-def test_any_role_without_an_explicit_grant_is_denied():
-    owner = make_principal(Role.OWNER)
-    resource = ResourceScope(business_id=10, branch_id=22)
-
-    assert not has_permission(owner, PERMISSION_A, resource)
+def test_role_permissions_match_the_approved_matrix():
+    assert dict(ROLE_PERMISSIONS) == {
+        role: frozenset(permissions)
+        for role, permissions in EXPECTED_ROLE_PERMISSIONS.items()
+    }
 
 
 @pytest.mark.parametrize(
-    "role, branch_id",
+    ("role", "permission"),
     [
-        (Role.OWNER, None),
-        (Role.BRANCH_MANAGER, 22),
-        (Role.EMPLOYEE, 22),
+        (role, permission)
+        for role, permissions in EXPECTED_ROLE_PERMISSIONS.items()
+        for permission in sorted(permissions)
     ],
 )
-def test_each_role_is_denied_when_permission_is_missing(role, branch_id):
+def test_every_approved_permission_is_granted_with_trusted_grant_and_scope(
+    role, permission
+):
+    branch_id = None if role is Role.OWNER else 22
+    principal = make_principal(
+        role,
+        branch_id=branch_id,
+        permissions=EXPECTED_ROLE_PERMISSIONS[role],
+    )
+    resource = ResourceScope(business_id=10, branch_id=23 if role is Role.OWNER else 22)
+
+    assert has_permission(principal, permission, resource)
+
+
+@pytest.mark.parametrize(
+    ("role", "permission"),
+    [
+        (role, permission)
+        for role, permissions in EXPECTED_ROLE_PERMISSIONS.items()
+        for permission in sorted(
+            set.union(*EXPECTED_ROLE_PERMISSIONS.values()) - permissions
+        )
+    ],
+)
+def test_role_cannot_use_permission_outside_its_matrix_even_if_granted(
+    role, permission
+):
+    principal = make_principal(
+        role,
+        branch_id=None if role is Role.OWNER else 22,
+        permissions={permission},
+    )
+    resource = ResourceScope(business_id=10, branch_id=22)
+
+    assert not has_permission(principal, permission, resource)
+
+
+@pytest.mark.parametrize("role", list(Role))
+def test_permission_also_requires_a_trusted_server_side_grant(role):
+    branch_id = None if role is Role.OWNER else 22
+    permission = next(iter(EXPECTED_ROLE_PERMISSIONS[role]))
     principal = make_principal(role, branch_id=branch_id)
     resource = ResourceScope(business_id=10, branch_id=22)
 
-    assert not has_permission(principal, PERMISSION_A, resource)
+    assert not has_permission(principal, permission, resource)
 
 
-def test_product_catalog_approval_is_owner_only():
-    owner = make_principal(Role.OWNER, permissions={PRODUCT_CATALOG_APPROVAL})
-    resource = ResourceScope(business_id=10, branch_id=22)
-    manager = make_principal(
-        Role.BRANCH_MANAGER,
-        branch_id=22,
-        permissions={PRODUCT_CATALOG_APPROVAL},
+@pytest.mark.parametrize("role", list(Role))
+def test_all_roles_are_denied_access_to_another_business(role):
+    branch_id = None if role is Role.OWNER else 22
+    permission = next(iter(EXPECTED_ROLE_PERMISSIONS[role]))
+    principal = make_principal(
+        role,
+        branch_id=branch_id,
+        permissions={permission},
     )
-    employee = make_principal(
-        Role.EMPLOYEE,
-        branch_id=22,
-        permissions={PRODUCT_CATALOG_APPROVAL},
+    resource = ResourceScope(business_id=99, branch_id=22)
+
+    assert not has_permission(principal, permission, resource)
+
+
+@pytest.mark.parametrize("role", [Role.BRANCH_MANAGER, Role.EMPLOYEE])
+def test_branch_scoped_roles_cannot_access_another_branch(role):
+    permission = next(iter(EXPECTED_ROLE_PERMISSIONS[role]))
+    principal = make_principal(role, branch_id=22, permissions={permission})
+    resource = ResourceScope(business_id=10, branch_id=23)
+
+    assert not has_permission(principal, permission, resource)
+
+
+@pytest.mark.parametrize("role", [Role.BRANCH_MANAGER, Role.EMPLOYEE])
+def test_branch_scoped_roles_need_an_assigned_and_resource_branch(role):
+    permission = next(iter(EXPECTED_ROLE_PERMISSIONS[role]))
+    principal_without_branch = make_principal(role, permissions={permission})
+    resource_without_branch = ResourceScope(business_id=10, branch_id=None)
+    principal = make_principal(role, branch_id=22, permissions={permission})
+    resource = ResourceScope(business_id=10, branch_id=None)
+
+    assert not has_permission(
+        principal_without_branch,
+        permission,
+        ResourceScope(business_id=10, branch_id=22),
     )
-
-    assert has_permission(owner, PRODUCT_CATALOG_APPROVAL, resource)
-    assert not has_permission(manager, PRODUCT_CATALOG_APPROVAL, resource)
-    assert not has_permission(employee, PRODUCT_CATALOG_APPROVAL, resource)
+    assert not has_permission(principal, permission, resource_without_branch)
+    assert not has_permission(principal, permission, resource)
 
 
-def test_sale_cancellation_approval_allows_owner_and_authorized_manager():
-    resource = ResourceScope(business_id=10, branch_id=22)
+def test_owner_can_access_branchless_and_other_branch_resources_in_own_business():
     owner = make_principal(
         Role.OWNER,
-        permissions={SALE_CANCELLATION_APPROVAL},
+        permissions={"business_settings:manage", "inventory:view"},
     )
-    manager = make_principal(
-        Role.BRANCH_MANAGER,
+
+    assert has_permission(
+        owner,
+        "business_settings:manage",
+        ResourceScope(business_id=10, branch_id=None),
+    )
+    assert has_permission(
+        owner,
+        "inventory:view",
+        ResourceScope(business_id=10, branch_id=22),
+    )
+
+
+@pytest.mark.parametrize("missing_business_id", [True, False])
+def test_missing_business_scope_fails_closed(missing_business_id):
+    owner = make_principal(
+        Role.OWNER,
+        business_id=None if missing_business_id else 10,
+        permissions={"dashboard:view"},
+    )
+    resource = ResourceScope(
+        business_id=None if not missing_business_id else 10,
         branch_id=22,
-        permissions={SALE_CANCELLATION_APPROVAL},
     )
 
-    assert has_permission(owner, SALE_CANCELLATION_APPROVAL, resource)
-    assert has_permission(manager, SALE_CANCELLATION_APPROVAL, resource)
+    assert not has_permission(owner, "dashboard:view", resource)
 
 
-def test_sale_cancellation_approval_requires_grant_and_assigned_branch():
+def test_client_like_role_string_is_not_accepted_as_trusted_role():
+    principal = make_principal(
+        "Owner",
+        permissions=EXPECTED_ROLE_PERMISSIONS[Role.OWNER],
+    )
     resource = ResourceScope(business_id=10, branch_id=22)
-    unauthorized_manager = make_principal(Role.BRANCH_MANAGER, branch_id=22)
-    other_branch_manager = make_principal(
-        Role.BRANCH_MANAGER,
-        branch_id=23,
-        permissions={SALE_CANCELLATION_APPROVAL},
-    )
-    employee = make_principal(
-        Role.EMPLOYEE,
-        branch_id=22,
-        permissions={SALE_CANCELLATION_APPROVAL},
-    )
 
-    assert not has_permission(
-        unauthorized_manager, SALE_CANCELLATION_APPROVAL, resource
+    assert not has_permission(principal, "branches:manage", resource)
+
+
+def test_unknown_permission_is_denied():
+    owner = make_principal(
+        Role.OWNER,
+        permissions={"unknown:operation"},
     )
-    assert not has_permission(
-        other_branch_manager, SALE_CANCELLATION_APPROVAL, resource
-    )
-    assert not has_permission(employee, SALE_CANCELLATION_APPROVAL, resource)
+    resource = ResourceScope(business_id=10, branch_id=22)
+
+    assert not has_permission(owner, "unknown:operation", resource)
