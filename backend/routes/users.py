@@ -64,3 +64,36 @@ def create_user():
             "and database support are implemented."
         )
     }), 501
+
+
+@users_bp.patch("/users/<user_id>/status")
+def update_user_status(user_id):
+    """Validate a status update until authentication and database support exist."""
+    errors = {}
+
+    if not re.fullmatch(r"[0-9]+", user_id):
+        errors["user_id"] = "Must be a positive integer."
+    elif int(user_id) < 1:
+        errors["user_id"] = "Must be a positive integer."
+
+    if not request.is_json:
+        return jsonify({"error": "Request body must be JSON."}), 400
+
+    data = request.get_json(silent=True)
+    if not isinstance(data, dict):
+        return jsonify({"error": "Request body must be a JSON object."}), 400
+
+    if "is_active" not in data:
+        errors["is_active"] = "This field is required."
+    elif type(data["is_active"]) is not bool:
+        errors["is_active"] = "Must be a Boolean value (true or false)."
+
+    if errors:
+        return jsonify({"errors": errors}), 400
+
+    return jsonify({
+        "message": (
+            "Input is valid, but changing user status is unavailable until authentication "
+            "and database integration are implemented."
+        )
+    }), 501
