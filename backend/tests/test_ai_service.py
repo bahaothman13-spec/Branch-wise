@@ -1,7 +1,9 @@
 """Mocked tests for the provisional AI service; no API or database is needed."""
 
+import builtins
 import json
 import os
+import socket
 import sqlite3
 from unittest.mock import Mock
 
@@ -29,6 +31,23 @@ def isolated_ai_settings(monkeypatch, caplog):
     monkeypatch.setenv("AI_API_KEY", FAKE_API_KEY)
 
 
+@pytest.fixture(autouse=True)
+def blocked_network(monkeypatch):
+    """Block ordinary socket networking and detect even swallowed attempts."""
+    attempted_connection = Mock(
+        side_effect=AssertionError("Real networking is disabled in AI tests.")
+    )
+    monkeypatch.setattr(socket, "create_connection", attempted_connection)
+    monkeypatch.setattr(socket, "getaddrinfo", attempted_connection)
+    for method in ("connect", "connect_ex", "sendto"):
+        monkeypatch.setattr(socket.socket, method, attempted_connection)
+
+    yield attempted_connection
+
+    # The client catches exceptions, so also check that no attempt was made.
+    attempted_connection.assert_not_called()
+
+
 @pytest.fixture
 def provider():
     return Mock(return_value={"text": "A safe answer."})
@@ -44,6 +63,14 @@ def assert_safe_error(result, expected_code):
     assert isinstance(result["error"]["message"], str)
     assert result["error"]["message"].strip()
     assert FAKE_API_KEY not in json.dumps(result)
+
+
+def assert_no_key_leak(result, caplog):
+    """Check returned data and complete log records, including hidden fields."""
+    assert FAKE_API_KEY not in json.dumps(result)
+    assert FAKE_API_KEY not in caplog.text
+    for record in caplog.records:
+        assert FAKE_API_KEY not in repr(record.__dict__)
 
 
 def test_configuration_uses_provisional_defaults():
@@ -150,8 +177,7 @@ def test_success_preserves_text_and_supplies_private_settings(
     provider.assert_called_once_with(
         "  Hello  ", api_key=FAKE_API_KEY, timeout=2.5
     )
-    assert FAKE_API_KEY not in json.dumps(result)
-    assert FAKE_API_KEY not in caplog.text
+    assert_no_key_leak(result, caplog)
 
 
 def test_input_at_character_limit_is_accepted(monkeypatch, provider):
@@ -196,8 +222,8 @@ def test_provider_failures_do_not_expose_private_details(
 
     assert_safe_error(result, expected_code)
     assert private_details not in json.dumps(result)
-    assert FAKE_API_KEY not in caplog.text
     assert private_details not in caplog.text
+    assert_no_key_leak(result, caplog)
 
 
 @pytest.mark.parametrize(
@@ -246,19 +272,70 @@ def test_output_above_character_limit_is_rejected(monkeypatch):
 def test_credentials_in_provider_output_are_not_returned_or_logged(output, caplog):
     fake_provider = Mock(return_value=output)
 
-    assert_safe_error(run_ai({"text": "Hello"}, fake_provider), "AI_INVALID_OUTPUT")
-    assert FAKE_API_KEY not in caplog.text
+    result = run_ai({"text": "Hello"}, fake_provider)
+
+    assert_safe_error(result, "AI_INVALID_OUTPUT")
+    assert_no_key_leak(result, caplog)
 
 
-def test_invalid_configuration_does_not_echo_its_value(monkeypatch, caplog):
-    monkeypatch.setenv("AI_TIMEOUT_SECONDS", FAKE_API_KEY)
+@pytest.mark.parametrize(
+    "setting",
+    ["AI_TIMEOUT_SECONDS", "AI_MAX_INPUT_CHARS", "AI_MAX_OUTPUT_CHARS"],
+)
+def test_invalid_configuration_does_not_echo_its_value(monkeypatch, caplog, setting):
+    monkeypatch.setenv(setting, FAKE_API_KEY)
 
     with pytest.raises(ValueError) as error:
         load_ai_config()
 
     assert FAKE_API_KEY not in str(error.value)
-    assert_safe_error(run_ai({"text": "Hello"}), "AI_CONFIG_ERROR")
-    assert FAKE_API_KEY not in caplog.text
+    result = run_ai({"text": "Hello"})
+    assert_safe_error(result, "AI_CONFIG_ERROR")
+    assert_no_key_leak(result, caplog)
+
+
+def test_chained_provider_exception_does_not_expose_its_private_cause(caplog):
+    def failing_provider(text, *, api_key, timeout):
+        try:
+            raise ValueError(f"Private adapter details: {api_key}")
+        except ValueError as cause:
+            raise RuntimeError("Adapter failed") from cause
+
+    result = run_ai({"text": "Hello"}, failing_provider)
+
+    assert_safe_error(result, "AI_PROVIDER_ERROR")
+    assert_no_key_leak(result, caplog)
+
+
+def test_rejected_request_does_not_echo_private_fields(caplog):
+    request_data = {"text": "Hello", "api_key": FAKE_API_KEY}
+
+    result = run_ai(request_data)
+
+    assert_safe_error(result, "AI_INVALID_INPUT")
+    assert_no_key_leak(result, caplog)
+
+
+@pytest.mark.parametrize(
+    "failure,expected_code",
+    [
+        (None, None),
+        (TimeoutError("Simulated timeout"), "AI_TIMEOUT"),
+        (ConnectionError("Simulated connection failure"), "AI_CONNECTION_ERROR"),
+    ],
+    ids=["success", "timeout", "connection-error"],
+)
+def test_fake_provider_uses_no_network(blocked_network, failure, expected_code):
+    fake_provider = Mock(return_value={"text": "A local answer."}, side_effect=failure)
+
+    result = run_ai({"text": "Hello"}, fake_provider)
+
+    if expected_code is None:
+        assert result == {"ok": True, "data": {"text": "A local answer."}, "error": None}
+    else:
+        assert_safe_error(result, expected_code)
+    fake_provider.assert_called_once_with("Hello", api_key=FAKE_API_KEY, timeout=10.0)
+    blocked_network.assert_not_called()
 
 
 def test_client_calls_the_fake_provider_without_a_real_api():
@@ -285,12 +362,18 @@ def test_client_calls_the_fake_provider_without_a_real_api():
 def test_sql_and_python_like_text_is_returned_as_data(monkeypatch, untrusted_text):
     database_connection = Mock(side_effect=AssertionError("Database access attempted"))
     command_execution = Mock(side_effect=AssertionError("Command execution attempted"))
+    python_execution = Mock(side_effect=AssertionError("Python execution attempted"))
     monkeypatch.setattr(sqlite3, "connect", database_connection)
     monkeypatch.setattr(os, "system", command_execution)
     fake_provider = Mock(return_value={"text": untrusted_text})
 
-    result = run_ai({"text": untrusted_text}, fake_provider)
+    # Limit these patches to the service call so pytest can still run normally.
+    with monkeypatch.context() as execution_guard:
+        execution_guard.setattr(builtins, "eval", python_execution)
+        execution_guard.setattr(builtins, "exec", python_execution)
+        result = run_ai({"text": untrusted_text}, fake_provider)
 
     assert result == {"ok": True, "data": {"text": untrusted_text}, "error": None}
     database_connection.assert_not_called()
     command_execution.assert_not_called()
+    python_execution.assert_not_called()
