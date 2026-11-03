@@ -1,7 +1,7 @@
-"""Communication boundary for a server-supplied fake AI provider.
+"""Communication boundary for an application-supplied AI provider.
 
-Phase 1 makes no real API requests. A future provider adapter must implement
-actual network timeouts and translate its response into the internal format.
+The callable may be a test fake or the explicit Gemini adapter. Adapters handle
+network timeouts and translate provider responses into the internal format.
 """
 
 

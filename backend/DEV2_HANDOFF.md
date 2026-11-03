@@ -43,7 +43,7 @@ CRUD workflow (create, read, update, delete) is implemented by this helper.
 ## BE-38: Internal AI text service — PARTIAL
 
 Sources: [ai_service.py](ai_service.py), [ai_config.py](ai_config.py), and
-[ai_client.py](ai_client.py).
+[ai_client.py](ai_client.py). Phase 3 adds [gemini_provider.py](gemini_provider.py).
 
 `run_ai(request_data, provider=None)` accepts a dictionary containing **only**
 `text`, with a nonblank string value. It loads server settings, checks the input
@@ -53,12 +53,12 @@ limit, and does not contain the exact configured API key. Text keeps its origina
 whitespace; limits count Python characters, including whitespace, not AI tokens.
 
 These are provisional internal Python conventions, not a public API contract or
-an external provider's response format. There is no BE-38 Flask endpoint or real
-AI provider adapter. The service itself does not make network requests, access a
-database, execute generated SQL/Python, or modify business records.
+an external provider's response format. There is no BE-38 Flask endpoint. Network
+work belongs to the explicitly supplied adapter; the service has no database,
+generated SQL/Python execution, or business-record modification behavior.
 
-Example, from an outer `backend/` Python session, with a nonblank `AI_API_KEY`
-already set in the process environment:
+Example, from an outer `backend/` Python session, with a nonblank `GEMINI_API_KEY`
+or fallback `AI_API_KEY` already set in the process environment:
 
 ```python
 from ai_service import run_ai
@@ -73,6 +73,27 @@ result = run_ai({"text": "Hello"}, provider=fake_provider)
 The fake provider above makes no API calls. The provider argument comes from
 trusted application code, never from a field in the request dictionary. With valid
 input and settings, leaving it out returns `AI_NOT_CONFIGURED`.
+
+### Phase 3 Gemini adapter
+
+For later authorized live use, import `gemini_provider` from `gemini_provider` and
+explicitly pass it as `run_ai(request_data, provider=gemini_provider)`. This path
+can make a real API request; tests replace the SDK client with a mock. There is no
+automatic provider selection or SDK client creation when importing the adapter.
+
+The adapter uses the pinned official `google-genai` SDK and
+`client.interactions.create(model=..., input=text, store=False, timeout=...)`.
+The default model is `gemini-3.8-flash`. It returns the documented `output_text`
+from completed responses as `{"text": ...}`, which still passes through the
+existing service checks. Missing or unfinished responses are rejected with
+`AI_INVALID_OUTPUT`, even if they contain partial text.
+`store=False` requests stateless interaction behavior. The SDK client is closed
+after each call. See [Google's Interactions guide](https://ai.google.dev/gemini-api/docs/interactions-overview).
+
+The Interactions timeout argument uses seconds. The adapter maps SDK timeout and
+connection exceptions to the existing `AI_TIMEOUT` and `AI_CONNECTION_ERROR`
+flow. Authentication failures and other request errors become the existing safe
+`AI_PROVIDER_ERROR`; exception details are not returned or logged by this code.
 
 Supporting functions:
 
@@ -99,13 +120,12 @@ The existing codes are:
 | `AI_PROVIDER_ERROR` | The supplied provider raised another exception. |
 | `AI_INVALID_OUTPUT` | Output shape, text, length, or the exact-key check failed. |
 
-Missing integration: select a real provider and agree its use and application
-contract; implement an adapter and add any required SDK or HTTP dependency;
-translate its response into the current internal text format; and wire the service
-into the application with the agreed authentication and request handling. The
-adapter must enforce actual network timeouts and map provider-specific failures
-to the exceptions handled here. Passing `timeout` to a callable does **not** impose
-a wall-clock deadline. Add integration tests before claiming real API support.
+Remaining integration: an authorized team member must verify credentials, model
+access, and behavior with a live Gemini API test. The application contract,
+authentication, request handling, and Flask wiring still need separate work.
+The generic callable boundary does not itself enforce a deadline; the Gemini
+adapter passes the timeout to the SDK. Phase 3 has mocked tests only and does not
+prove a working live connection. **BE-38 remains PARTIAL.**
 
 ## Environment variables and dependencies
 
@@ -114,7 +134,9 @@ environment; no secret values are included here:
 
 | Name | Requirement in the current AI code |
 | --- | --- |
-| `AI_API_KEY` | Required, nonblank after trimming; no default. |
+| `GEMINI_API_KEY` | Preferred key, nonblank after trimming; no default. |
+| `AI_API_KEY` | Backward-compatible fallback if the Gemini key is unset or blank. At least one key is required. |
+| `GEMINI_MODEL` | Optional; unset or blank uses `gemini-3.8-flash`. Nonblank values are trimmed. |
 | `AI_TIMEOUT_SECONDS` | Optional; default `10`. Must be a positive, finite number. |
 | `AI_MAX_INPUT_CHARS` | Optional; default `10000`. Must be a positive integer. |
 | `AI_MAX_OUTPUT_CHARS` | Optional; default `20000`. Must be a positive integer. |
@@ -124,12 +146,16 @@ The AI module does not load `.env` files, even though `python-dotenv` is listed 
 add deliberate environment loading during later application integration. The
 existing [.env.example](.env.example) lists `FLASK_DEBUG`, `SECRET_KEY`, `DB_HOST`,
 `DB_PORT`, `DB_USER`, `DB_PASSWORD`, and `DB_NAME`, but not the AI names above.
-Those template names are not read or required by these two helpers.
+Those template names are not read or required by these two helpers. When both
+keys are set, `GEMINI_API_KEY` takes precedence for every supplied provider,
+including test fakes. Keys are never accepted from the request dictionary.
 
-The helper production code uses only Python's standard library and local modules.
-Its tests require `pytest`. The shared requirements file also lists Flask, the
-MySQL connector, and related packages; their presence does not implement database
-or AI integration. No real AI provider SDK or adapter is included in this work.
+Supplier validation and the generic service use Python's standard library and
+local modules. The Gemini adapter requires `google-genai==2.34.0`; its timeout
+and connection exception imports match that pinned SDK's Interactions behavior
+and must be checked when upgrading. Tests require `pytest`. The shared requirements
+also list Flask, the MySQL connector, and related packages; their presence does
+not implement database or application integration.
 
 ## Run all existing outer-backend tests
 
@@ -155,6 +181,9 @@ Run the full outer-backend suite:
 - [test_ai_service.py](tests/test_ai_service.py): configuration, input/output
   rules and limits, fake provider calls, safe errors, key protection, and checks
   against networking and execution of generated text.
+- [test_gemini_provider.py](tests/test_gemini_provider.py): mocked Gemini SDK
+  calls, configuration precedence, response text, request failures, shared limits,
+  and key protection, with networking blocked.
 
 Tests supply fake AI settings themselves. No real credentials, running Flask app,
 database, or AI service are needed. They test local behavior with fake providers

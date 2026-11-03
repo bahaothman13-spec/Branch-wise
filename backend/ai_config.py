@@ -1,4 +1,4 @@
-"""Environment settings for the provisional BE-38 internal AI service.
+"""Environment settings for the BE-38 internal AI service.
 
 The defaults are Phase 1 choices, not limits imposed by an AI provider.
 This module does not read .env files or load settings during import.
@@ -15,7 +15,11 @@ def load_ai_config():
     never include it in responses, logs, or provider input text.
     """
     message = "AI service configuration is missing or invalid."
-    api_key = os.getenv("AI_API_KEY", "").strip()
+    # Prefer the approved provider's setting while retaining the Phase 1 name.
+    api_key = (
+        os.getenv("GEMINI_API_KEY", "").strip()
+        or os.getenv("AI_API_KEY", "").strip()
+    )
 
     try:
         timeout = float(os.getenv("AI_TIMEOUT_SECONDS", "10"))

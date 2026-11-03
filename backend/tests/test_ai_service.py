@@ -23,6 +23,8 @@ def isolated_ai_settings(monkeypatch, caplog):
     caplog.set_level("DEBUG")
     for name in (
         "AI_API_KEY",
+        "GEMINI_API_KEY",
+        "GEMINI_MODEL",
         "AI_TIMEOUT_SECONDS",
         "AI_MAX_INPUT_CHARS",
         "AI_MAX_OUTPUT_CHARS",
