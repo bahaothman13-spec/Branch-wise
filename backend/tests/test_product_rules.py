@@ -48,10 +48,11 @@ def make_principal(role=Role.OWNER, business_id=10, branch_id=22, permissions=No
     )
 
 
-def category(category_id=7, business_id=10, branch_id=None):
+def category(category_id=7, business_id=10, branch_id=None, is_active=True):
     return ProductCategoryContext(
         category_id=category_id,
         scope=ResourceScope(business_id=business_id, branch_id=branch_id),
+        is_active=is_active,
     )
 
 
@@ -121,6 +122,13 @@ def test_category_context_must_match_the_id_and_business():
         product_data(category=category(business_id=99))
     with pytest.raises(ValueError, match="trusted category context"):
         product_data(category={"category_id": 7, "business_id": 10})
+
+
+def test_product_creation_requires_a_trusted_active_category():
+    with pytest.raises(ValueError, match="inactive category"):
+        product_data(category=category(is_active=False))
+    with pytest.raises(ValueError, match="is_active"):
+        product_data(category=category(is_active=1))
 
 
 @pytest.mark.parametrize(
@@ -281,7 +289,6 @@ def test_modification_rejects_foreign_products_and_foreign_categories():
             changes={"name": "Other"},
             category=category(business_id=99),
         )
-
     with pytest.raises(ValueError, match="same business"):
         validate_product_modification(
             make_principal(),
@@ -291,6 +298,32 @@ def test_modification_rejects_foreign_products_and_foreign_categories():
             changes={"category_id": 8},
             category=category(category_id=8, business_id=99),
         )
+
+
+def test_modification_cannot_assign_an_inactive_category():
+    with pytest.raises(ValueError, match="inactive category"):
+        validate_product_modification(
+            make_principal(),
+            product_id=50,
+            product_scope=product_scope(),
+            current_data=product_data(),
+            changes={"category_id": 8},
+            category=category(category_id=8, is_active=False),
+        )
+
+
+def test_unrelated_modification_preserves_historical_inactive_category():
+    proposal = validate_product_modification(
+        make_principal(),
+        product_id=50,
+        product_scope=product_scope(),
+        current_data=product_data(),
+        changes={"name": "Renamed Green Tea"},
+        category=category(is_active=False),
+    )
+
+    assert proposal.data.category_id == 7
+    assert proposal.data.name == "Renamed Green Tea"
 
 
 def test_modification_cannot_change_inventory_or_unknown_metadata():

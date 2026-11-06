@@ -52,6 +52,7 @@ class ProductCategoryContext:
 
     category_id: int
     scope: ResourceScope
+    is_active: bool = True
 
 
 @dataclass(frozen=True)
@@ -144,7 +145,9 @@ def _validate_product_text(value, field_name, max_length):
     return normalized
 
 
-def _validate_category_context(business_id, category_id, category):
+def _validate_category_context(
+    business_id, category_id, category, *, require_active=True
+):
     if not is_positive_integer(category_id):
         raise ValueError("category_id must be a positive integer.")
     if type(category) is not ProductCategoryContext:
@@ -155,6 +158,10 @@ def _validate_category_context(business_id, category_id, category):
         raise ValueError("The trusted category does not match category_id.")
     if not resources_belong_to_business(business_id, category.scope):
         raise ValueError("category_id must belong to the same business as the product.")
+    if type(category.is_active) is not bool:
+        raise ValueError("The trusted category has an invalid is_active value.")
+    if require_active and not category.is_active:
+        raise ValueError("An inactive category cannot be assigned to a product.")
 
 
 def _validated_catalog_entry(entry):
@@ -236,6 +243,7 @@ def validate_product_data(
     catalog_codes=(),
     exclude_resource_type=None,
     exclude_resource_id=None,
+    _require_active_category=True,
 ):
     """Validate required fields and return normalized shared-catalog metadata.
 
@@ -245,7 +253,14 @@ def validate_product_data(
     """
     if not is_positive_integer(business_id):
         raise ValueError("business_id must be a positive integer.")
-    _validate_category_context(business_id, category_id, category)
+    if type(_require_active_category) is not bool:
+        raise ValueError("_require_active_category must be a boolean.")
+    _validate_category_context(
+        business_id,
+        category_id,
+        category,
+        require_active=_require_active_category,
+    )
     normalized_name = _validate_product_text(
         name, "name", PRODUCT_NAME_MAX_LENGTH
     )
@@ -415,6 +430,7 @@ def validate_product_modification(
         catalog_codes=catalog_codes,
         exclude_resource_type="product",
         exclude_resource_id=product_id,
+        _require_active_category=(proposed["category_id"] != current.category_id),
     )
     return ProductProposal(data=data, request=request)
 
