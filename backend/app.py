@@ -1,4 +1,4 @@
-from flask import Flask
+from flask import Flask, request
 from werkzeug.exceptions import HTTPException
 
 from routes.auth import auth_bp
@@ -6,15 +6,79 @@ from routes.branches import branches_bp
 from routes.health import health_bp
 from routes.users import users_bp
 from response_helpers import error_response
+from rate_limiting import LoginRateLimitConfig
 
 
-def create_app():
+DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024
+MAX_CONFIGURABLE_CONTENT_LENGTH = 16 * 1024 * 1024
+
+
+class BranchWiseFlask(Flask):
+    """Flask app that never writes exception details or tracebacks to logs."""
+
+    def log_exception(self, exc_info):
+        # Flask normally logs the exception tuple, including a traceback. Avoid
+        # recording request values, credentials, database errors, or secrets.
+        self.logger.error("Unhandled request exception.")
+
+
+def _validate_security_config(config):
+    max_content_length = config["MAX_CONTENT_LENGTH"]
+    if (
+        type(max_content_length) is not int
+        or not 1 <= max_content_length <= MAX_CONFIGURABLE_CONTENT_LENGTH
+    ):
+        raise ValueError(
+            "MAX_CONTENT_LENGTH must be a positive integer no greater than 16 MiB."
+        )
+
+    LoginRateLimitConfig(
+        identifier_limit=config["LOGIN_RATE_LIMIT_IDENTIFIER_LIMIT"],
+        client_limit=config["LOGIN_RATE_LIMIT_CLIENT_LIMIT"],
+        window_seconds=config["LOGIN_RATE_LIMIT_WINDOW_SECONDS"],
+    )
+
+    app_environment = config["APP_ENV"]
+    if not isinstance(app_environment, str) or app_environment not in {
+        "development",
+        "test",
+        "production",
+    }:
+        raise ValueError("APP_ENV must be development, test, or production.")
+    if type(config["SESSION_COOKIE_SECURE"]) is not bool:
+        raise ValueError("SESSION_COOKIE_SECURE must be a Boolean value.")
+    if type(config.get("DEBUG", False)) is not bool:
+        raise ValueError("DEBUG must be a Boolean value.")
+    if app_environment == "production" and not config["SESSION_COOKIE_SECURE"]:
+        raise ValueError("SESSION_COOKIE_SECURE must be enabled in production.")
+    if app_environment == "production" and config.get("DEBUG"):
+        raise ValueError("DEBUG must be disabled in production.")
+
+
+def create_app(config=None):
     """Create the Flask application and register its API routes."""
-    app = Flask(__name__)
+    app = BranchWiseFlask(__name__)
+    app.config.from_mapping(
+        MAX_CONTENT_LENGTH=DEFAULT_MAX_CONTENT_LENGTH,
+        APP_ENV="development",
+        SESSION_COOKIE_SECURE=False,
+        LOGIN_RATE_LIMIT_IDENTIFIER_LIMIT=5,
+        LOGIN_RATE_LIMIT_CLIENT_LIMIT=30,
+        LOGIN_RATE_LIMIT_WINDOW_SECONDS=15 * 60,
+    )
+    if config is not None:
+        app.config.update(config)
+    _validate_security_config(app.config)
+
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
     app.register_blueprint(branches_bp)
     app.register_blueprint(users_bp)
+
+    @app.before_request
+    def enforce_request_body_limit():
+        """Read request bodies through Werkzeug's configured size-limited stream."""
+        request.get_data(cache=True)
 
     @app.errorhandler(HTTPException)
     def handle_http_error(error):
@@ -26,6 +90,7 @@ def create_app():
             403: "Permission denied.",
             404: "Resource not found.",
             405: "Method not allowed.",
+            413: "Request body is too large.",
             409: "The request conflicts with the current resource state.",
             422: "Request validation failed.",
             501: "This operation is not implemented.",
@@ -42,6 +107,21 @@ def create_app():
             "An unexpected server error occurred.", status_code=500
         )
 
+    @app.after_request
+    def add_security_headers(response):
+        """Attach conservative browser protections to all API responses."""
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        response.headers.setdefault(
+            "Content-Security-Policy",
+            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+        )
+        response.headers.setdefault(
+            "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
+        )
+        return response
+
     return app
 
 
@@ -49,4 +129,4 @@ app = create_app()
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    app.run(debug=False)

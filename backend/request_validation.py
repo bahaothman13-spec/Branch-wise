@@ -23,6 +23,14 @@ def read_json_object():
     return data, None
 
 
+def validate_allowed_fields(data, allowed_fields, message="This field is not allowed."):
+    """Reject unknown input keys without reflecting attacker-controlled names."""
+    allowed = frozenset(allowed_fields)
+    if any(field not in allowed for field in data):
+        return {"body": message}
+    return {}
+
+
 def required_string_error(data, field):
     """Return the existing validation message for a required string field."""
     if field not in data:

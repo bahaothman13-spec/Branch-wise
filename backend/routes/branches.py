@@ -1,7 +1,11 @@
 from flask import Blueprint
 
 from response_helpers import error_response, json_response
-from request_validation import parse_positive_integer_id, read_json_object
+from request_validation import (
+    parse_positive_integer_id,
+    read_json_object,
+    validate_allowed_fields,
+)
 
 
 branches_bp = Blueprint("branches", __name__, url_prefix="/api/branches")
@@ -75,9 +79,11 @@ def update_branch(branch_id):
     if not data:
         errors["body"] = "Provide at least one field to update."
 
-    for field in data:
-        if field not in EDITABLE_FIELDS:
-            errors[field] = "This field cannot be updated."
+    errors.update(
+        validate_allowed_fields(
+            data, EDITABLE_FIELDS, message="This field cannot be updated."
+        )
+    )
 
     if "name" in data:
         if not isinstance(data["name"], str):
@@ -105,6 +111,9 @@ def create_branch():
         return error_response(json_error, status_code=400)
 
     errors = {}
+    errors.update(
+        validate_allowed_fields(data, ("name", *OPTIONAL_STRING_FIELDS))
+    )
 
     if "name" not in data:
         errors["name"] = "This field is required."

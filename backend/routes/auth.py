@@ -6,6 +6,7 @@ from request_validation import (
     password_length_error,
     read_json_object,
     required_string_error,
+    validate_allowed_fields,
 )
 
 
@@ -23,6 +24,7 @@ def register():
 
     errors = {}
     required_fields = ("owner_name", "business_name", "email", "password")
+    errors.update(validate_allowed_fields(data, required_fields))
 
     for field in required_fields:
         field_error = required_string_error(data, field)
@@ -55,7 +57,9 @@ def login():
         return error_response(json_error, status_code=400)
 
     errors = {}
-    for field in ("email", "password"):
+    allowed_fields = ("email", "password")
+    errors.update(validate_allowed_fields(data, allowed_fields))
+    for field in allowed_fields:
         field_error = required_string_error(data, field)
         if field_error:
             errors[field] = field_error

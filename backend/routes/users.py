@@ -8,6 +8,7 @@ from request_validation import (
     parse_positive_integer_id,
     read_json_object,
     required_string_error,
+    validate_allowed_fields,
 )
 
 
@@ -26,6 +27,7 @@ def create_user():
 
     errors = {}
     string_fields = ("name", "email", "role", "initial_password")
+    errors.update(validate_allowed_fields(data, (*string_fields, "branch_id")))
 
     for field in string_fields:
         field_error = required_string_error(data, field)
@@ -82,6 +84,7 @@ def update_user_status(user_id):
         errors["is_active"] = "This field is required."
     elif type(data["is_active"]) is not bool:
         errors["is_active"] = "Must be a Boolean value (true or false)."
+    errors.update(validate_allowed_fields(data, ("is_active",)))
 
     if errors:
         return error_response(errors=errors, status_code=400)
@@ -106,6 +109,7 @@ def change_my_password():
 
     errors = {}
     password_fields = ("current_password", "new_password", "confirm_password")
+    errors.update(validate_allowed_fields(data, password_fields))
 
     for field in password_fields:
         field_error = required_string_error(data, field)

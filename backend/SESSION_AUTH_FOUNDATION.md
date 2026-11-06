@@ -49,6 +49,13 @@ lifetime; this token is readable by browser code and cannot authenticate by
 itself. Both cookies set `Secure` when called with `production=True`. No
 `Domain` attribute is added.
 
+BE-51 adds app configuration validation: production requires
+`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
+When cookie issuance is integrated, pass the validated secure-cookie setting
+to this helper (or `production=True`). Production must serve cookies only over
+HTTPS. The deployment's TLS terminator must enforce HTTPS; HSTS is left to that
+terminator because this app does not yet know the trusted proxy/TLS setup.
+
 `require_authenticated_session` resolves identity only from the session cookie.
 It checks that unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`, and other
 non-safe methods) send the same CSRF token in the readable CSRF cookie and the
@@ -58,6 +65,11 @@ decorator exposes the trusted context as `g.authenticated_session`.
 
 The decorator returns `401` when no valid session manager or session exists,
 and `403` for a failed CSRF check. It is not attached to any current route.
+
+There is no application CORS configuration. Browser clients must use the same
+origin when cookie sessions are integrated unless a reviewed exact-origin
+allowlist is added. Credentialed wildcard CORS is not permitted. CSRF remains
+the session-bound mechanism above; BE-51 does not introduce another one.
 
 ## Decisions required for database integration
 

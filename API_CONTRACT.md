@@ -14,6 +14,9 @@ operations or database integration are complete.
 - Identifiers in current paths are positive decimal integers.
 - Requests that send a body should use `Content-Type: application/json`.
 - Responses from these routes use `application/json`.
+- The default maximum request body size is 1 MiB. Deployments may configure a
+  smaller or larger positive limit up to 16 MiB. A request above the configured
+  limit returns `413` with `{"error":"Request body is too large."}`.
 
 For routes that require a JSON body, a missing or non-JSON content type returns
 `400` with `{"error":"Request body must be JSON."}`. An empty or malformed
@@ -54,6 +57,41 @@ messages. Do not include submitted passwords or other secrets in error details.
 Validation messages should be short and keyed by the request field; they should
 not echo the rejected value. Keep old endpoint shapes stable unless their
 contracts are intentionally versioned or changed as part of an approved task.
+JSON endpoints reject fields outside their documented input allowlist with a
+`400` validation error under `errors.body`. The response does not reflect
+unknown key names or values. This prevents future persistence code from
+accidentally treating client-supplied role, owner, status, or other internal
+fields as writable.
+
+## Security foundations and current limits
+
+Responses include `X-Content-Type-Options`, `X-Frame-Options`,
+`Referrer-Policy`, a restrictive `Content-Security-Policy`, and
+`Permissions-Policy`. These headers do not alter the current JSON payloads.
+The API does not enable CORS and does not return `Access-Control-Allow-Origin`;
+credentialed cross-origin browser requests are not supported. Do not add
+wildcard CORS when session cookies are integrated. Configure an exact trusted
+origin list only if a future deployment requires cross-origin access.
+
+Generic JSON error handling hides exception details. Unexpected request
+exceptions are not written to application logs with exception text or a
+stack trace. Database connection failures also use generic log messages.
+HSTS is not set by the application; the production TLS-terminating ingress
+must enforce HTTPS and may set HSTS once HTTPS is configured.
+
+The current app factory validates security configuration. Production must set
+`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
+`MAX_CONTENT_LENGTH` defaults to 1 MiB. Login limit defaults are 5 attempts per
+normalized identifier and 30 per client address in 15 minutes, but the prepared
+rules are not installed on `/api/auth/login`. They require an injected atomic,
+shared `RateLimitStore` and a secret key before integration.
+
+These foundations do **not** authenticate or authorize the existing API
+routes. Login and logout remain placeholders; session persistence, trusted
+database identity loading, route-level authentication/RBAC/business isolation,
+production rate-limit storage, and MySQL integration remain pending. The
+existing CSRF helper in `session_auth.py` is reserved for future session-backed
+state-changing routes and is not duplicated here.
 
 ## HTTP status codes
 
@@ -66,6 +104,7 @@ contracts are intentionally versioned or changed as part of an approved task.
 | `403` | The authenticated user lacks permission for an operation. Authorization policy is described in `backend/ROLE_PERMISSIONS.md`; the current routes do not enforce it yet. |
 | `404` | The route or resource was not found. Unknown routes return a generic JSON error. When resource scoping is implemented, use `404` for inaccessible cross-business resources if revealing their existence would leak information. |
 | `409` | A request conflicts with existing state, such as a duplicate business-scoped branch name or an invalid state transition. No current route emits it. |
+| `413` | Request body exceeds the configured maximum size; returns a generic JSON error. |
 | `422` | A syntactically valid request fails semantic validation. Existing validation uses `400`; retain that behavior unless a contract change is approved. |
 | `500` | Unexpected server failure. The response is generic and must not include an exception, stack trace, SQL, credentials, or password. |
 | `501` | The endpoint is recognized but its operation is not implemented. Several current endpoints use this while authentication or database support is pending. |
@@ -113,14 +152,14 @@ future list behavior, not features already implemented.
 | Method and path | Current behavior |
 | --- | --- |
 | `GET /api/health` | Returns `200` with `{"status":"ok"}`. |
-| `POST /api/auth/register` | Validates registration input (`400` on invalid input); otherwise returns `501` pending database integration. |
-| `POST /api/auth/login` | Validates login input (`400` on invalid input); otherwise returns `501` pending authentication integration. |
+| `POST /api/auth/register` | Accepts `owner_name`, `business_name`, `email`, and `password`; validates input (`400` on invalid input); otherwise returns `501` pending database integration. |
+| `POST /api/auth/login` | Accepts `email` and `password`; validates input (`400` on invalid input); otherwise returns `501` pending authentication integration. |
 | `POST /api/auth/logout` | Returns `501` pending session management. |
 | `GET /api/branches` | Returns `501` pending authentication and database integration. |
-| `POST /api/branches` | Validates branch input (`400` on invalid input); otherwise returns `501`. |
+| `POST /api/branches` | Accepts `name`, `address`, `phone`, and `notes`; validates input (`400` on invalid input); otherwise returns `501`. |
 | `GET /api/branches/{branch_id}` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |
-| `PATCH /api/branches/{branch_id}` | Validates the ID and editable fields (`400` if invalid); otherwise returns `501`. |
+| `PATCH /api/branches/{branch_id}` | Accepts `name`, `address`, `phone`, and `notes`; validates the ID and editable fields (`400` if invalid); otherwise returns `501`. |
 | `PATCH /api/branches/{branch_id}/deactivate` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |
-| `POST /api/users` | Validates user input (`400` on invalid input); otherwise returns `501`. |
-| `PATCH /api/users/{user_id}/status` | Validates the ID and status value (`400` if invalid); otherwise returns `501`. |
-| `PATCH /api/users/me/password` | Validates password-change input (`400` on invalid input); otherwise returns `501`. |
+| `POST /api/users` | Accepts `name`, `email`, `role`, `initial_password`, and `branch_id`; validates input (`400` on invalid input); otherwise returns `501`. |
+| `PATCH /api/users/{user_id}/status` | Accepts `is_active`; validates the ID and status value (`400` if invalid); otherwise returns `501`. |
+| `PATCH /api/users/me/password` | Accepts `current_password`, `new_password`, and `confirm_password`; validates input (`400` on invalid input); otherwise returns `501`. |
