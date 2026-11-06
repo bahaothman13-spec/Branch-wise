@@ -508,6 +508,7 @@ def build_sale_cancellation_movements(
     actor_id,
     cancellation_request,
     sale,
+    existing_returns,
     branch_scope,
     variant_scopes,
 ):
@@ -516,7 +517,9 @@ def build_sale_cancellation_movements(
     A Pending request is checked through the existing approval rule and planned
     in its proposed Approved state. An already Approved request can also be
     planned, subject to the existing restoration rule and approval permission.
-    The sale ID is the source reference because requests currently have no ID.
+    ``existing_returns`` must contain the complete trusted linked return
+    history; the sale ID is the source reference because requests currently
+    have no ID.
     """
     _positive_id(actor_id, "actor_id")
     if not isinstance(sale, Sale) or not isinstance(
@@ -533,15 +536,27 @@ def build_sale_cancellation_movements(
     except (TypeError, ValueError):
         raise ValueError("Unknown sale cancellation request status.") from None
     if request_status is SaleCancellationStatus.PENDING:
-        validate_request_approval(principal, cancellation_request, sale)
+        validate_request_approval(
+            principal,
+            cancellation_request,
+            sale,
+            existing_returns=existing_returns,
+        )
         approved_request = replace(
             cancellation_request, status=SaleCancellationStatus.APPROVED
         )
     elif request_status is SaleCancellationStatus.APPROVED:
+        # A repeated Approved plan still needs authorization, including the
+        # fully-returned case where there are no variant movements to check.
+        require_resource_access(
+            principal, SALE_CANCELLATION_APPROVAL, branch_scope
+        )
         approved_request = cancellation_request
     else:
         raise ValueError("Only approved cancellation requests can restore inventory.")
-    quantities = calculate_restoration_quantities(sale, approved_request)
+    quantities = calculate_restoration_quantities(
+        sale, approved_request, existing_returns=existing_returns
+    )
     resolved = _variant_resource_scopes(variant_scopes, quantities)
     for product_scope, variant_scope in resolved.values():
         require_resource_access(

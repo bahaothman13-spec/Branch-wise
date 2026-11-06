@@ -31,7 +31,10 @@ from permissions import (
     ResourceScope,
     Role,
 )
-from return_inspection_rules import InspectionCondition
+from return_inspection_rules import (
+    InspectionCondition,
+    calculate_inspection_inventory_changes,
+)
 from return_rules import ReturnRequest, ReturnStatus
 from sale_cancellation_rules import (
     Sale,
@@ -218,6 +221,7 @@ def test_approved_sale_cancellation_proposes_restoration_once():
         actor_id=ACTOR_ID,
         cancellation_request=cancellation,
         sale=sale(),
+        existing_returns=[],
         branch_scope=branch_scope(),
         variant_scopes=variant_scopes(),
     )
@@ -235,6 +239,7 @@ def test_approved_sale_cancellation_proposes_restoration_once():
             cancellation, status=SaleCancellationStatus.APPROVED
         ),
         sale=sale(),
+        existing_returns=[],
         branch_scope=branch_scope(),
         variant_scopes=variant_scopes(),
     )
@@ -251,6 +256,157 @@ def test_approved_sale_cancellation_proposes_restoration_once():
             actor_id=ACTOR_ID,
             cancellation_request=cancellation,
             sale=sale(status=SaleStatus.CANCELLED),
+            existing_returns=[],
+            branch_scope=branch_scope(),
+            variant_scopes=variant_scopes(),
+        )
+
+
+def test_cancellation_movement_subtracts_all_inspected_dispositions():
+    return_request = ReturnRequest(
+        business_id=BUSINESS_ID,
+        branch_id=SOURCE_BRANCH_ID,
+        reason="Customer return.",
+        items=[{"product_variant_id": VARIANT_ID, "quantity": 3}],
+        original_sale_id=501,
+        status=ReturnStatus.PARTIALLY_INSPECTED,
+    )
+    returned_items = [
+        {"return_item_id": 701 + offset, "product_variant_id": VARIANT_ID, "quantity": 1}
+        for offset in range(3)
+    ]
+    inspection_items = [
+        {
+            "return_item_id": 701,
+            "quantity": 1,
+            "condition": InspectionCondition.RESALABLE,
+        },
+        {
+            "return_item_id": 702,
+            "quantity": 1,
+            "condition": InspectionCondition.DAMAGED,
+        },
+        {
+            "return_item_id": 703,
+            "quantity": 1,
+            "condition": InspectionCondition.UNDER_INSPECTION,
+        },
+    ]
+    inspection_changes = calculate_inspection_inventory_changes(
+        principal(),
+        return_request,
+        returned_items,
+        inspection_id=804,
+        inspection_items=inspection_items,
+    )
+    movements = build_sale_cancellation_movements(
+        principal(),
+        actor_id=ACTOR_ID,
+        cancellation_request=SaleCancellationRequest(
+            sale_id=501,
+            business_id=BUSINESS_ID,
+            branch_id=SOURCE_BRANCH_ID,
+            reason="Duplicate sale.",
+        ),
+        sale=sale(items=[{"product_variant_id": VARIANT_ID, "quantity": 5}]),
+        existing_returns=[return_request],
+        branch_scope=branch_scope(),
+        variant_scopes=variant_scopes(),
+    )
+
+    assert inspection_changes.available_stock_additions == {VARIANT_ID: 1}
+    assert inspection_changes.damaged_stock_additions == {VARIANT_ID: 1}
+    assert inspection_changes.remaining_under_inspection == {703: 1}
+    assert len(movements) == 1
+    assert movements[0].branch_id == SOURCE_BRANCH_ID
+    assert movements[0].quantity_delta == 2
+
+
+def test_fully_returned_sale_has_no_zero_quantity_cancellation_movement():
+    returned = ReturnRequest(
+        business_id=BUSINESS_ID,
+        branch_id=SOURCE_BRANCH_ID,
+        reason="Customer return.",
+        items=[{"product_variant_id": VARIANT_ID, "quantity": 4}],
+        original_sale_id=501,
+        status=ReturnStatus.PROCESSED,
+    )
+    movements = build_sale_cancellation_movements(
+        principal(),
+        actor_id=ACTOR_ID,
+        cancellation_request=SaleCancellationRequest(
+            sale_id=501,
+            business_id=BUSINESS_ID,
+            branch_id=SOURCE_BRANCH_ID,
+            reason="Duplicate sale.",
+        ),
+        sale=sale(),
+        existing_returns=[returned],
+        branch_scope=branch_scope(),
+        variant_scopes=variant_scopes(),
+    )
+
+    assert movements == ()
+    assert plan_inventory_movements(movements, {}).expected_balances == ()
+
+
+def test_duplicate_sale_lines_produce_one_branch_variant_cancellation_effect():
+    returned = ReturnRequest(
+        business_id=BUSINESS_ID,
+        branch_id=SOURCE_BRANCH_ID,
+        reason="Customer return.",
+        items=[{"product_variant_id": VARIANT_ID, "quantity": 1}],
+        original_sale_id=501,
+        status=ReturnStatus.PROCESSED,
+    )
+    movements = build_sale_cancellation_movements(
+        principal(),
+        actor_id=ACTOR_ID,
+        cancellation_request=SaleCancellationRequest(
+            sale_id=501,
+            business_id=BUSINESS_ID,
+            branch_id=SOURCE_BRANCH_ID,
+            reason="Duplicate sale.",
+        ),
+        sale=sale(
+            items=[
+                {"product_variant_id": VARIANT_ID, "quantity": 2},
+                {"product_variant_id": VARIANT_ID, "quantity": 3},
+            ]
+        ),
+        existing_returns=[returned],
+        branch_scope=branch_scope(),
+        variant_scopes=variant_scopes(),
+    )
+
+    assert len(movements) == 1
+    assert movements[0].branch_id == SOURCE_BRANCH_ID
+    assert movements[0].product_variant_id == VARIANT_ID
+    assert movements[0].quantity_delta == 4
+
+
+def test_zero_restoration_still_requires_cancellation_approval_permission():
+    returned = ReturnRequest(
+        business_id=BUSINESS_ID,
+        branch_id=SOURCE_BRANCH_ID,
+        reason="Customer return.",
+        items=[{"product_variant_id": VARIANT_ID, "quantity": 4}],
+        original_sale_id=501,
+        status=ReturnStatus.PROCESSED,
+    )
+    with pytest.raises(PermissionError):
+        build_sale_cancellation_movements(
+            principal(Role.EMPLOYEE),
+            actor_id=ACTOR_ID,
+            cancellation_request=SaleCancellationRequest(
+                sale_id=501,
+                business_id=BUSINESS_ID,
+                branch_id=SOURCE_BRANCH_ID,
+                reason="Duplicate sale.",
+                status=SaleCancellationStatus.APPROVED,
+            ),
+            sale=sale(),
+            existing_returns=[returned],
             branch_scope=branch_scope(),
             variant_scopes=variant_scopes(),
         )

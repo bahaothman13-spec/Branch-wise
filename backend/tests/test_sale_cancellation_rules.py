@@ -8,6 +8,7 @@ from permissions import (
     SALE_CANCELLATION_REQUEST,
     Role,
 )
+from return_rules import ReturnRequest, ReturnStatus
 from sale_cancellation_rules import (
     ALLOWED_STATUS_TRANSITIONS,
     Sale,
@@ -66,6 +67,19 @@ def make_request(**changes):
     return SaleCancellationRequest(**values)
 
 
+def make_return(**changes):
+    values = {
+        "business_id": 10,
+        "branch_id": 22,
+        "reason": "Customer return.",
+        "items": [{"product_variant_id": 101, "quantity": 1}],
+        "original_sale_id": 501,
+        "status": ReturnStatus.PENDING,
+    }
+    values.update(changes)
+    return ReturnRequest(**values)
+
+
 def test_employee_can_submit_request_for_completed_sale_in_assigned_branch():
     request = validate_request_submission(
         make_principal(Role.EMPLOYEE), make_sale(), "  Incorrect item.  "
@@ -108,13 +122,15 @@ def test_only_completed_sale_can_be_submitted_for_cancellation():
         )
 
 
-def test_sale_with_processed_returns_cannot_be_requested_for_cancellation():
-    with pytest.raises(ValueError, match="processed returns"):
-        validate_request_submission(
-            make_principal(Role.EMPLOYEE),
-            make_sale(has_processed_returns=True),
-            "Reason",
-        )
+def test_sale_with_processed_returns_can_be_requested_for_cancellation():
+    request = validate_request_submission(
+        make_principal(Role.EMPLOYEE),
+        make_sale(has_processed_returns=True),
+        "Reason",
+        existing_returns=[make_return(status=ReturnStatus.PROCESSED)],
+    )
+
+    assert request.status is SaleCancellationStatus.PENDING
 
 
 def test_duplicate_pending_request_for_same_sale_is_rejected():
@@ -143,12 +159,17 @@ def test_rejected_request_does_not_block_a_new_pending_request():
 
 
 def test_owner_can_approve_request_in_their_business():
-    validate_request_approval(make_principal(Role.OWNER), make_request(), make_sale())
+    validate_request_approval(
+        make_principal(Role.OWNER), make_request(), make_sale(), existing_returns=[]
+    )
 
 
 def test_branch_manager_can_approve_request_in_their_branch():
     validate_request_approval(
-        make_principal(Role.BRANCH_MANAGER), make_request(), make_sale()
+        make_principal(Role.BRANCH_MANAGER),
+        make_request(),
+        make_sale(),
+        existing_returns=[],
     )
 
 
@@ -156,7 +177,9 @@ def test_branch_manager_can_approve_request_in_their_branch():
 def test_employee_cannot_approve_or_reject_cancellation_request(role):
     principal = make_principal(role)
     with pytest.raises(PermissionError):
-        validate_request_approval(principal, make_request(), make_sale())
+        validate_request_approval(
+            principal, make_request(), make_sale(), existing_returns=[]
+        )
     with pytest.raises(PermissionError):
         validate_request_rejection(principal, make_request(), make_sale(), "Reason")
 
@@ -167,6 +190,7 @@ def test_manager_cannot_approve_request_outside_assigned_branch():
             make_principal(Role.BRANCH_MANAGER),
             make_request(branch_id=23),
             make_sale(branch_id=23),
+            existing_returns=[],
         )
 
 
@@ -176,7 +200,7 @@ def test_owner_from_another_business_cannot_approve_or_reject():
     sale = make_sale()
 
     with pytest.raises(PermissionError):
-        validate_request_approval(owner, request, sale)
+        validate_request_approval(owner, request, sale, existing_returns=[])
     with pytest.raises(PermissionError):
         validate_request_rejection(owner, request, sale, "Reason")
 
@@ -184,16 +208,125 @@ def test_owner_from_another_business_cannot_approve_or_reject():
 def test_request_must_match_the_server_loaded_sale():
     with pytest.raises(ValueError, match="does not match"):
         validate_request_approval(
-            make_principal(Role.OWNER), make_request(sale_id=502), make_sale()
+            make_principal(Role.OWNER),
+            make_request(sale_id=502),
+            make_sale(),
+            existing_returns=[],
         )
 
 
-def test_approval_is_blocked_if_sale_has_processed_returns():
-    with pytest.raises(ValueError, match="processed returns"):
+def test_approval_after_partial_return_restores_only_remaining_units():
+    sale = make_sale(has_processed_returns=True)
+    previous_return = make_return(status=ReturnStatus.PARTIALLY_INSPECTED)
+
+    validate_request_approval(
+        make_principal(Role.OWNER),
+        make_request(),
+        sale,
+        existing_returns=[previous_return],
+    )
+    quantities = calculate_restoration_quantities(
+        sale,
+        make_request(status=SaleCancellationStatus.APPROVED),
+        existing_returns=[previous_return],
+    )
+
+    assert quantities == {101: 1, 202: 1}
+
+
+def test_cancellation_restores_zero_when_all_sold_units_were_returned():
+    sale = make_sale(items=[{"product_variant_id": 101, "quantity": 2}])
+    returned = make_return(
+        items=[{"product_variant_id": 101, "quantity": 2}],
+        status=ReturnStatus.PROCESSED,
+    )
+
+    assert calculate_restoration_quantities(
+        sale,
+        make_request(status=SaleCancellationStatus.APPROVED),
+        existing_returns=[returned],
+    ) == {}
+
+
+def test_restoration_is_calculated_per_variant_across_sale_lines():
+    sale = make_sale(
+        items=[
+            {"product_variant_id": 101, "quantity": 2},
+            {"product_variant_id": 202, "quantity": 4},
+            {"product_variant_id": 101, "quantity": 3},
+        ]
+    )
+    returns = [
+        make_return(items=[{"product_variant_id": 101, "quantity": 2}]),
+        make_return(items=[{"product_variant_id": 202, "quantity": 1}]),
+    ]
+
+    assert calculate_restoration_quantities(
+        sale,
+        make_request(status=SaleCancellationStatus.APPROVED),
+        existing_returns=returns,
+    ) == {101: 3, 202: 3}
+
+
+@pytest.mark.parametrize(
+    "status",
+    [
+        ReturnStatus.PENDING,
+        ReturnStatus.VERIFIED,
+        ReturnStatus.PARTIALLY_INSPECTED,
+        ReturnStatus.PROCESSED,
+    ],
+)
+def test_all_active_return_statuses_reduce_cancellation_restoration(status):
+    sale = make_sale(items=[{"product_variant_id": 101, "quantity": 3}])
+    returned = make_return(
+        items=[{"product_variant_id": 101, "quantity": 2}], status=status
+    )
+
+    assert calculate_restoration_quantities(
+        sale,
+        make_request(status=SaleCancellationStatus.APPROVED),
+        existing_returns=[returned],
+    ) == {101: 1}
+
+
+def test_invalid_cumulative_return_totals_are_rejected_at_approval_and_planning():
+    sale = make_sale(items=[{"product_variant_id": 101, "quantity": 2}])
+    excessive = make_return(
+        items=[{"product_variant_id": 101, "quantity": 3}],
+        status=ReturnStatus.PROCESSED,
+    )
+
+    with pytest.raises(ValueError, match="Cumulative return quantity"):
         validate_request_approval(
             make_principal(Role.OWNER),
             make_request(),
-            make_sale(has_processed_returns=True),
+            sale,
+            existing_returns=[excessive],
+        )
+    with pytest.raises(ValueError, match="Cumulative return quantity"):
+        calculate_restoration_quantities(
+            sale,
+            make_request(status=SaleCancellationStatus.APPROVED),
+            existing_returns=[excessive],
+        )
+
+
+def test_cancellation_requires_the_trusted_linked_return_history():
+    with pytest.raises(ValueError, match="return history"):
+        calculate_restoration_quantities(
+            make_sale(),
+            make_request(status=SaleCancellationStatus.APPROVED),
+            existing_returns=None,
+        )
+
+
+def test_wrong_scope_linked_returns_are_rejected_during_cancellation():
+    with pytest.raises(ValueError, match="scope"):
+        calculate_restoration_quantities(
+            make_sale(),
+            make_request(status=SaleCancellationStatus.APPROVED),
+            existing_returns=[make_return(business_id=99)],
         )
 
 
@@ -203,6 +336,7 @@ def test_approval_is_blocked_if_sale_is_no_longer_completed():
             make_principal(Role.OWNER),
             make_request(),
             make_sale(status=SaleStatus.CANCELLED),
+            existing_returns=[],
         )
 
 
@@ -232,7 +366,7 @@ def test_decided_request_cannot_be_approved_or_rejected_again(status):
     sale = make_sale()
 
     with pytest.raises(ValueError, match="Only pending"):
-        validate_request_approval(principal, request, sale)
+        validate_request_approval(principal, request, sale, existing_returns=[])
     with pytest.raises(ValueError, match="Only pending"):
         validate_request_rejection(principal, request, sale, "Reason")
 
@@ -247,7 +381,9 @@ def test_restoration_calculation_aggregates_lines_for_an_approved_request():
     )
 
     quantities = calculate_restoration_quantities(
-        sale, make_request(status=SaleCancellationStatus.APPROVED)
+        sale,
+        make_request(status=SaleCancellationStatus.APPROVED),
+        existing_returns=[],
     )
 
     assert quantities == {101: 5, 202: 1}
@@ -265,7 +401,7 @@ def test_pending_and_rejected_requests_cannot_restore_inventory(status):
     original_inventory = inventory.copy()
 
     with pytest.raises(ValueError, match="Only approved"):
-        calculate_restoration_quantities(sale, request)
+        calculate_restoration_quantities(sale, request, existing_returns=[])
 
     assert sale.__dict__ == original_sale
     assert request.__dict__ == original_request
@@ -277,6 +413,7 @@ def test_cancelled_sale_cannot_be_planned_for_restoration_again():
         calculate_restoration_quantities(
             make_sale(status=SaleStatus.CANCELLED),
             make_request(status=SaleCancellationStatus.APPROVED),
+            existing_returns=[],
         )
 
 

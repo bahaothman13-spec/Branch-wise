@@ -8,6 +8,7 @@ from permissions import (
     AuthenticatedPrincipal,
     RETURNS_INSPECT,
     RETURNS_RECORD,
+    SALE_CANCELLATION_APPROVAL,
     SALE_CANCELLATION_REQUEST,
     Role,
 )
@@ -25,6 +26,7 @@ from sale_cancellation_rules import (
     Sale,
     SaleCancellationRequest,
     SaleStatus,
+    validate_request_approval,
     validate_request_submission,
 )
 
@@ -180,7 +182,7 @@ def test_return_reason_is_required(reason):
         )
 
 
-def test_linked_return_requires_a_completed_sale_and_rejects_cancelled_sale():
+def test_new_linked_returns_are_rejected_after_sale_cancellation():
     with pytest.raises(ValueError, match="cancelled sale"):
         validate_return_submission(
             make_principal(Role.EMPLOYEE),
@@ -379,17 +381,28 @@ def test_processed_or_unrequested_variants_cannot_be_inspected_again():
         )
 
 
-def test_partially_inspected_or_processed_returns_block_sale_cancellation():
+def test_inspected_returns_do_not_block_cancellation_request_or_approval():
     sale = make_sale()
+    employee = make_principal(
+        Role.EMPLOYEE,
+        permissions={RETURNS_RECORD, SALE_CANCELLATION_REQUEST},
+    )
+    owner = make_principal(Role.OWNER, permissions={SALE_CANCELLATION_APPROVAL})
     for status in (ReturnStatus.PARTIALLY_INSPECTED, ReturnStatus.PROCESSED):
         existing = make_return(status=status)
         assert sale_has_processed_returns(sale, [existing])
-        with pytest.raises(ValueError, match="processed returns"):
-            validate_request_submission(
-                make_principal(Role.EMPLOYEE),
-                replace(sale, has_processed_returns=True),
-                "Cancel sale",
-            )
+        request = validate_request_submission(
+            employee,
+            replace(sale, has_processed_returns=True),
+            "Cancel sale",
+            existing_returns=[existing],
+        )
+        validate_request_approval(
+            owner,
+            request,
+            replace(sale, has_processed_returns=True),
+            existing_returns=[existing],
+        )
 
 
 def test_pending_return_does_not_count_as_a_processed_return_for_cancellation():

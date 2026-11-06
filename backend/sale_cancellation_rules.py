@@ -50,7 +50,11 @@ ALLOWED_SALE_STATUS_TRANSITIONS = {
 
 @dataclass(frozen=True)
 class Sale:
-    """Trusted sale data loaded by the server for these rule checks."""
+    """Trusted sale data loaded by the server for these rule checks.
+
+    ``has_processed_returns`` is a legacy summary flag; cancellation quantity
+    planning requires the full linked return history instead.
+    """
 
     sale_id: int
     business_id: int
@@ -186,7 +190,19 @@ def validate_sale_status_transition(current_status, new_status):
         )
 
 
-def validate_request_submission(principal, sale, reason, existing_requests=None):
+def _cumulative_return_quantities_for_cancellation(sale, existing_returns):
+    """Load the existing return rule lazily to avoid its Sale import cycle."""
+    if existing_returns is None:
+        raise ValueError("Trusted linked return history is required for cancellation.")
+
+    from return_rules import calculate_cumulative_return_quantities
+
+    return calculate_cumulative_return_quantities(sale, existing_returns)
+
+
+def validate_request_submission(
+    principal, sale, reason, existing_requests=None, *, existing_returns=None
+):
     """Validate an employee request and return an in-memory Pending request.
 
     ``sale`` and ``existing_requests`` must come from trusted server-side
@@ -196,8 +212,6 @@ def validate_request_submission(principal, sale, reason, existing_requests=None)
     resource = _sale_scope(sale)
     if _as_sale_status(sale.status) is not SaleStatus.COMPLETED:
         raise ValueError("Only completed sales can be requested for cancellation.")
-    if sale.has_processed_returns:
-        raise ValueError("A sale with processed returns cannot be cancelled.")
     if not isinstance(reason, str) or not reason.strip():
         raise ValueError("A cancellation reason is required.")
 
@@ -207,6 +221,11 @@ def validate_request_submission(principal, sale, reason, existing_requests=None)
         resource,
         "request cancellation for",
     )
+
+    # Submission does not restore stock, but validate any supplied snapshot so
+    # malformed linked return totals are never treated as trusted context.
+    if existing_returns is not None:
+        _cumulative_return_quantities_for_cancellation(sale, existing_returns)
 
     requests = () if existing_requests is None else existing_requests
     if not isinstance(requests, (list, tuple)):
@@ -234,14 +253,12 @@ def _validate_pending_request(request):
         raise ValueError("Only pending cancellation requests can be decided.")
 
 
-def validate_request_approval(principal, request, sale):
-    """Authorize approval and ensure the sale is still eligible to cancel."""
+def validate_request_approval(principal, request, sale, *, existing_returns):
+    """Authorize approval and validate all trusted linked return quantities."""
     _validate_pending_request(request)
     _validate_request_sale_match(request, sale)
     if _as_sale_status(sale.status) is not SaleStatus.COMPLETED:
         raise ValueError("Only completed sales can be cancelled.")
-    if sale.has_processed_returns:
-        raise ValueError("A sale with processed returns cannot be cancelled.")
     _require_permission(
         principal,
         SALE_CANCELLATION_APPROVAL,
@@ -249,6 +266,7 @@ def validate_request_approval(principal, request, sale):
         "approve cancellation for",
     )
     validate_status_transition(request.status, SaleCancellationStatus.APPROVED)
+    _cumulative_return_quantities_for_cancellation(sale, existing_returns)
 
 
 def validate_request_rejection(principal, request, sale, reason):
@@ -266,7 +284,7 @@ def validate_request_rejection(principal, request, sale, reason):
     validate_status_transition(request.status, SaleCancellationStatus.REJECTED)
 
 
-def calculate_restoration_quantities(sale, request):
+def calculate_restoration_quantities(sale, request, *, existing_returns):
     """Return sold quantities to restore for an approved cancellation.
 
     This calculation has no side effects. A persisted Cancelled sale cannot be
@@ -277,12 +295,42 @@ def calculate_restoration_quantities(sale, request):
     _validate_request_sale_match(request, sale)
     if _as_request_status(request.status) is not SaleCancellationStatus.APPROVED:
         raise ValueError("Only approved cancellation requests can restore inventory.")
-    if sale.has_processed_returns:
-        raise ValueError("A sale with processed returns cannot be cancelled.")
     validate_sale_status_transition(sale.status, SaleStatus.CANCELLED)
 
-    quantities = {}
-    for item in _validated_sale_items(sale.items):
+    sale_items = _validated_sale_items(sale.items)
+    sold_quantities = {}
+    for item in sale_items:
         variant_id = item["product_variant_id"]
-        quantities[variant_id] = quantities.get(variant_id, 0) + item["quantity"]
+        sold_quantities[variant_id] = (
+            sold_quantities.get(variant_id, 0) + item["quantity"]
+        )
+
+    returned_quantities = _cumulative_return_quantities_for_cancellation(
+        sale, existing_returns
+    )
+
+    # Return lines identify variants, not individual sale-line IDs. Allocate
+    # each variant's cumulative returns across its original lines, then group
+    # the remaining stock effect into one branch/variant quantity.
+    remaining_returns = dict(returned_quantities)
+    quantities = {}
+    for item in sale_items:
+        variant_id = item["product_variant_id"]
+        sold_quantity = item["quantity"]
+        returned_quantity = min(
+            sold_quantity, remaining_returns.get(variant_id, 0)
+        )
+        remaining_returns[variant_id] = (
+            remaining_returns.get(variant_id, 0) - returned_quantity
+        )
+        restoration_quantity = sold_quantity - returned_quantity
+        if restoration_quantity < 0:
+            raise ValueError("Restoration quantity cannot be negative.")
+        if restoration_quantity:
+            quantities[variant_id] = (
+                quantities.get(variant_id, 0) + restoration_quantity
+            )
+
+    if any(quantity < 0 for quantity in remaining_returns.values()):
+        raise ValueError("Cumulative return quantity cannot exceed the quantity sold.")
     return quantities
