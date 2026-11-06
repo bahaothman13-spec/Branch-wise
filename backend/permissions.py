@@ -12,6 +12,8 @@ from enum import Enum
 from types import MappingProxyType
 from typing import FrozenSet, Mapping
 
+from request_validation import is_positive_integer
+
 
 class Role(str, Enum):
     """Roles currently supported by BranchWise."""
@@ -164,6 +166,34 @@ class ResourceScope:
     branch_id: int | None
 
 
+def is_trusted_principal(principal) -> bool:
+    """Return whether the server supplied a complete, well-formed principal."""
+    if type(principal) is not AuthenticatedPrincipal:
+        return False
+    if type(principal.role) is not Role or not is_positive_integer(principal.business_id):
+        return False
+    if type(principal.permissions) not in (set, frozenset):
+        return False
+    if any(not isinstance(permission, str) for permission in principal.permissions):
+        return False
+
+    if principal.role is Role.OWNER:
+        return principal.branch_id is None
+    return is_positive_integer(principal.branch_id)
+
+
+def is_valid_resource_scope(resource) -> bool:
+    """Return whether a scope identifies a valid server-loaded resource."""
+    return (
+        type(resource) is ResourceScope
+        and is_positive_integer(resource.business_id)
+        and (
+            resource.branch_id is None
+            or is_positive_integer(resource.branch_id)
+        )
+    )
+
+
 def has_permission(
     principal: AuthenticatedPrincipal,
     required_permission: str,
@@ -181,7 +211,7 @@ def has_permission(
     role, permission, or resource-scope values.
     """
 
-    if type(principal.role) is not Role:
+    if not is_trusted_principal(principal) or not is_valid_resource_scope(resource):
         return False
     if not isinstance(required_permission, str):
         return False
@@ -191,9 +221,6 @@ def has_permission(
         return False
 
     if required_permission not in principal.permissions:
-        return False
-
-    if principal.business_id is None or resource.business_id is None:
         return False
 
     if principal.business_id != resource.business_id:
