@@ -15,6 +15,13 @@ operations or database integration are complete.
 - Requests that send a body should use `Content-Type: application/json`.
 - Responses from these routes use `application/json`.
 
+For routes that require a JSON body, a missing or non-JSON content type returns
+`400` with `{"error":"Request body must be JSON."}`. An empty or malformed
+JSON body, or a valid JSON value that is not an object, returns `400` with
+`{"error":"Request body must be a JSON object."}`. Current email fields are
+trimmed and checked for a local part and dot-separated domain labels; invalid
+values return a field-level validation error.
+
 ## Response structures
 
 The shared response helpers in `backend/response_helpers.py` centralize JSON

@@ -58,6 +58,68 @@ def test_registration_with_invalid_input_returns_400(client, registration_data):
     assert response.status_code == 400
 
 
+def test_registration_validation_error_does_not_echo_password(client):
+    password = "private-password"
+    response = client.post(
+        "/api/auth/register",
+        json={
+            "owner_name": "Test Owner",
+            "business_name": "Test Business",
+            "email": "invalid-email",
+            "password": password,
+        },
+    )
+
+    assert response.status_code == 400
+    assert password not in response.get_data(as_text=True)
+
+
+@pytest.mark.parametrize(
+    "email",
+    [
+        "name..part@example.com",
+        "name@example..com",
+        "name@-example.com",
+        "name@example.com.",
+    ],
+)
+@pytest.mark.parametrize(
+    ("path", "payload"),
+    [
+        (
+            "/api/auth/register",
+            {
+                "owner_name": "Test Owner",
+                "business_name": "Test Business",
+                "email": "owner@example.com",
+                "password": "valid-password",
+            },
+        ),
+        (
+            "/api/auth/login",
+            {"email": "owner@example.com", "password": "valid-password"},
+        ),
+        (
+            "/api/users",
+            {
+                "name": "Test Employee",
+                "email": "employee@example.com",
+                "role": "Employee",
+                "branch_id": 1,
+                "initial_password": "valid-password",
+            },
+        ),
+    ],
+)
+def test_email_validation_rejects_malformed_dot_or_domain_labels(
+    client, path, payload, email
+):
+    response = client.post(path, json={**payload, "email": email})
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"]["email"] == "Enter a valid email address."
+
+
 def test_login_with_valid_input_returns_501(client):
     response = client.post(
         "/api/auth/login",
@@ -206,6 +268,23 @@ def test_user_creation_with_valid_input_returns_501(client):
     assert response.status_code == 501
 
 
+@pytest.mark.parametrize("branch_id", [True, False])
+def test_user_creation_rejects_boolean_branch_ids(client, branch_id):
+    response = client.post(
+        "/api/users",
+        json={
+            "name": "Test Employee",
+            "email": "employee@example.com",
+            "role": "Employee",
+            "branch_id": branch_id,
+            "initial_password": "valid-password",
+        },
+    )
+
+    assert response.status_code == 400
+    assert response.get_json()["errors"]["branch_id"] == "Must be an integer."
+
+
 @pytest.mark.parametrize(
     "user_data",
     [
@@ -291,3 +370,55 @@ def test_password_change_with_invalid_input_returns_400(client, password_data):
     response = client.patch("/api/users/me/password", json=password_data)
 
     assert response.status_code == 400
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/api/auth/register"),
+        ("post", "/api/auth/login"),
+        ("post", "/api/users"),
+        ("patch", "/api/users/1/status"),
+        ("patch", "/api/users/me/password"),
+        ("post", "/api/branches"),
+        ("patch", "/api/branches/1"),
+    ],
+)
+@pytest.mark.parametrize("body", [b"", b"{bad json", b"null", b"[]"])
+def test_required_json_bodies_reject_missing_malformed_or_non_object_data(
+    client, method, path, body
+):
+    response = getattr(client, method)(path, data=body, content_type="application/json")
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "error": "Request body must be a JSON object."
+    }
+
+
+@pytest.mark.parametrize(
+    ("method", "path"),
+    [
+        ("post", "/api/auth/register"),
+        ("post", "/api/auth/login"),
+        ("post", "/api/users"),
+        ("patch", "/api/users/1/status"),
+        ("patch", "/api/users/me/password"),
+        ("post", "/api/branches"),
+        ("patch", "/api/branches/1"),
+    ],
+)
+def test_required_json_bodies_reject_a_non_json_content_type(client, method, path):
+    response = getattr(client, method)(path, data=b"{}", content_type="text/plain")
+
+    assert response.status_code == 400
+    assert response.get_json() == {"error": "Request body must be JSON."}
+
+
+def test_user_status_rejects_extremely_long_path_id_as_validation_error(client):
+    response = client.patch(f"/api/users/{'9' * 5000}/status", json={"is_active": True})
+
+    assert response.status_code == 400
+    assert response.get_json() == {
+        "errors": {"user_id": "Must be a positive integer."}
+    }

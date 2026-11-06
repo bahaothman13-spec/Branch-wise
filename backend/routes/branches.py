@@ -1,40 +1,13 @@
-import re
-
-from flask import Blueprint, request
+from flask import Blueprint
 
 from response_helpers import error_response, json_response
+from request_validation import parse_positive_integer_id, read_json_object
 
 
 branches_bp = Blueprint("branches", __name__, url_prefix="/api/branches")
 
 OPTIONAL_STRING_FIELDS = ("address", "phone", "notes")
 EDITABLE_FIELDS = ("name", *OPTIONAL_STRING_FIELDS)
-
-
-def _validate_branch_id(branch_id):
-    """Return the numeric ID, or None when the path value is not positive."""
-    if not re.fullmatch(r"[0-9]+", branch_id):
-        return None
-
-    try:
-        numeric_id = int(branch_id)
-    except ValueError:
-        # Very long digit strings can exceed Python's integer conversion limit.
-        return None
-
-    return numeric_id if numeric_id > 0 else None
-
-
-def _read_json_object():
-    """Return a JSON object or a short error message."""
-    if not request.is_json:
-        return None, "Request body must be JSON."
-
-    data = request.get_json(silent=True)
-    if not isinstance(data, dict):
-        return None, "Request body must be a JSON object."
-
-    return data, None
 
 
 def _branches_not_ready(action):
@@ -60,7 +33,7 @@ def list_branches():
 @branches_bp.get("/<branch_id>")
 def get_branch(branch_id):
     """View one branch after validating its path ID."""
-    if _validate_branch_id(branch_id) is None:
+    if parse_positive_integer_id(branch_id) is None:
         return error_response(
             errors={"branch_id": "Must be a positive integer."}, status_code=400
         )
@@ -73,7 +46,7 @@ def get_branch(branch_id):
 @branches_bp.patch("/<branch_id>/deactivate")
 def deactivate_branch(branch_id):
     """Validate a branch deactivation request until auth and DB are ready."""
-    if _validate_branch_id(branch_id) is None:
+    if parse_positive_integer_id(branch_id) is None:
         return error_response(
             errors={"branch_id": "Must be a positive integer."}, status_code=400
         )
@@ -89,10 +62,10 @@ def deactivate_branch(branch_id):
 def update_branch(branch_id):
     """Validate editable branch fields until auth and database support exist."""
     errors = {}
-    if _validate_branch_id(branch_id) is None:
+    if parse_positive_integer_id(branch_id) is None:
         errors["branch_id"] = "Must be a positive integer."
 
-    data, json_error = _read_json_object()
+    data, json_error = read_json_object()
     if json_error:
         if errors:
             errors["body"] = json_error
@@ -127,7 +100,7 @@ def update_branch(branch_id):
 @branches_bp.post("")
 def create_branch():
     """Validate branch data until Owner authentication and database support exist."""
-    data, json_error = _read_json_object()
+    data, json_error = read_json_object()
     if json_error:
         return error_response(json_error, status_code=400)
 
