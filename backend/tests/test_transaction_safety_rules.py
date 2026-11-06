@@ -1,5 +1,7 @@
 """Tests for pure transaction-safety contracts; no database is used."""
 
+from dataclasses import replace
+
 import pytest
 
 from permissions import AuthenticatedPrincipal, Role
@@ -106,6 +108,15 @@ def test_same_key_and_scope_with_different_payload_is_rejected():
     )
 
 
+def test_same_key_with_different_payload_is_rejected_while_request_is_in_progress():
+    existing = ExistingIdempotencyRecord(request(), IdempotencyState.IN_PROGRESS)
+    changed = request(payload={"items": [{"variant_id": 101, "quantity": 3}]})
+
+    assert decide_idempotency(changed, existing) is (
+        IdempotencyDecision.REJECT_PAYLOAD_CONFLICT
+    )
+
+
 def test_same_key_and_payload_still_cannot_execute_while_request_is_in_progress():
     prepared = request()
     processing = ExistingIdempotencyRecord(prepared, IdempotencyState.IN_PROGRESS)
@@ -113,6 +124,23 @@ def test_same_key_and_payload_still_cannot_execute_while_request_is_in_progress(
     assert decide_idempotency(prepared, processing) is (
         IdempotencyDecision.REQUEST_IN_PROGRESS
     )
+
+
+def test_malformed_persisted_idempotency_record_fails_closed():
+    prepared = request()
+
+    with pytest.raises(ValueError, match="Stored idempotency state"):
+        decide_idempotency(
+            prepared,
+            ExistingIdempotencyRecord(prepared, "committed"),
+        )
+
+    malformed_request = replace(prepared, payload_hash="not-a-sha256-hash")
+    with pytest.raises(ValueError, match="Stored payload hash"):
+        decide_idempotency(
+            prepared,
+            ExistingIdempotencyRecord(malformed_request, IdempotencyState.COMMITTED),
+        )
 
 
 @pytest.mark.parametrize(
