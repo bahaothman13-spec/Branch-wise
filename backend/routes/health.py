@@ -1,4 +1,6 @@
-from flask import Blueprint, jsonify
+from flask import Blueprint
+
+from response_helpers import success_response
 
 
 health_bp = Blueprint("health", __name__, url_prefix="/api")
@@ -6,4 +8,4 @@ health_bp = Blueprint("health", __name__, url_prefix="/api")
 
 @health_bp.get("/health")
 def health():
-    return jsonify({"status": "ok"})
+    return success_response({"status": "ok"})

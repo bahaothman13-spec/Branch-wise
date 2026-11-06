@@ -1,0 +1,119 @@
+# BranchWise API Contract
+
+This document describes the Flask API that currently exists in `backend/routes`
+and conventions for extending it. It is based on those routes and
+`backend/ROLE_PERMISSIONS.md`; no separate approved user-story document is
+present in this repository. It does not imply that the unimplemented business
+operations or database integration are complete.
+
+## Base URL and payloads
+
+- API routes use the `/api` prefix.
+- JSON request bodies must be JSON objects where a body is required. Field names
+  use `snake_case` (for example, `owner_name`, `branch_id`, and `is_active`).
+- Identifiers in current paths are positive decimal integers.
+- Requests that send a body should use `Content-Type: application/json`.
+- Responses from these routes use `application/json`.
+
+## Response structures
+
+The shared response helpers in `backend/response_helpers.py` centralize JSON
+serialization and status codes. The success helper passes its payload through
+unchanged to preserve current endpoint contracts. The error helper supports
+both current validation bodies and simple error bodies.
+
+Existing endpoints intentionally retain their established response shapes:
+
+```json
+{"status": "ok"}
+```
+
+```json
+{"message": "Database authentication is not implemented yet."}
+```
+
+```json
+{"error": "Request body must be JSON."}
+```
+
+```json
+{"errors": {"email": "Enter a valid email address."}}
+```
+
+For future endpoints, use a success payload with a `data` object and an
+optional `message`, for example `{"data": {"id": 12}, "message": "Created."}`.
+Use `error` for a general error and `errors` for field-level validation
+messages. Do not include submitted passwords or other secrets in error details.
+Validation messages should be short and keyed by the request field; they should
+not echo the rejected value. Keep old endpoint shapes stable unless their
+contracts are intentionally versioned or changed as part of an approved task.
+
+## HTTP status codes
+
+| Status | Meaning and use |
+| --- | --- |
+| `200` | Request completed successfully; used by `/api/health`. |
+| `201` | A resource was created successfully. None of the current create routes reaches this state yet. |
+| `400` | Malformed request, invalid JSON shape, or current field/path validation failure. Existing validation endpoints use this status for compatibility. |
+| `401` | Authentication is missing or invalid. The current Flask routes do not yet authenticate requests. |
+| `403` | The authenticated user lacks permission for an operation. Authorization policy is described in `backend/ROLE_PERMISSIONS.md`; the current routes do not enforce it yet. |
+| `404` | The route or resource was not found. Unknown routes return a generic JSON error. When resource scoping is implemented, use `404` for inaccessible cross-business resources if revealing their existence would leak information. |
+| `409` | A request conflicts with existing state, such as a duplicate business-scoped branch name or an invalid state transition. No current route emits it. |
+| `422` | A syntactically valid request fails semantic validation. Existing validation uses `400`; retain that behavior unless a contract change is approved. |
+| `500` | Unexpected server failure. The response is generic and must not include an exception, stack trace, SQL, credentials, or password. |
+| `501` | The endpoint is recognized but its operation is not implemented. Several current endpoints use this while authentication or database support is pending. |
+
+Validation errors are returned as a field-to-message object under `errors`.
+Authorization failures should use `401` for missing/invalid identity and `403`
+for a verified identity without the required role, permission, or business or
+branch scope. A missing resource uses `404`. Error text must not expose whether
+another business owns a resource when that would reveal private information.
+
+## Dates and times
+
+The current routes do not return date or timestamp fields. When a route adds
+them, use ISO 8601: date-only values as `YYYY-MM-DD`; timestamps as UTC with a
+`Z` suffix, for example `2026-11-06T14:30:00Z`. Do not return locale-dependent
+date strings.
+
+## Pagination and filtering
+
+No current list route returns a paginated dataset. When pagination is added,
+use query parameters `page` (1-based, default `1`) and `per_page` (default `20`,
+maximum `100`). Return the requested values and totals alongside `data`, for
+example:
+
+```json
+{
+  "data": [],
+  "pagination": {
+    "page": 1,
+    "per_page": 20,
+    "total_items": 0,
+    "total_pages": 0
+  }
+}
+```
+
+List filters should use documented, resource-specific `snake_case` query
+parameters, and only explicitly supported filters should affect results.
+Reject invalid page numbers, page sizes, and filter values using the validation
+error convention. Pagination and filtering described here are conventions for
+future list behavior, not features already implemented.
+
+## Current routes
+
+| Method and path | Current behavior |
+| --- | --- |
+| `GET /api/health` | Returns `200` with `{"status":"ok"}`. |
+| `POST /api/auth/register` | Validates registration input (`400` on invalid input); otherwise returns `501` pending database integration. |
+| `POST /api/auth/login` | Validates login input (`400` on invalid input); otherwise returns `501` pending authentication integration. |
+| `POST /api/auth/logout` | Returns `501` pending session management. |
+| `GET /api/branches` | Returns `501` pending authentication and database integration. |
+| `POST /api/branches` | Validates branch input (`400` on invalid input); otherwise returns `501`. |
+| `GET /api/branches/{branch_id}` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |
+| `PATCH /api/branches/{branch_id}` | Validates the ID and editable fields (`400` if invalid); otherwise returns `501`. |
+| `PATCH /api/branches/{branch_id}/deactivate` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |
+| `POST /api/users` | Validates user input (`400` on invalid input); otherwise returns `501`. |
+| `PATCH /api/users/{user_id}/status` | Validates the ID and status value (`400` if invalid); otherwise returns `501`. |
+| `PATCH /api/users/me/password` | Validates password-change input (`400` on invalid input); otherwise returns `501`. |

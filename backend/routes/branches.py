@@ -1,6 +1,8 @@
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
+
+from response_helpers import error_response, json_response
 
 
 branches_bp = Blueprint("branches", __name__, url_prefix="/api/branches")
@@ -36,12 +38,15 @@ def _read_json_object():
 
 
 def _branches_not_ready(action):
-    return jsonify({
-        "message": (
-            f"Input is valid, but branch {action} is unavailable until Owner "
-            "authentication and database integration are implemented."
-        )
-    }), 501
+    return json_response(
+        {
+            "message": (
+                f"Input is valid, but branch {action} is unavailable until Owner "
+                "authentication and database integration are implemented."
+            )
+        },
+        status_code=501,
+    )
 
 
 @branches_bp.get("")
@@ -56,7 +61,9 @@ def list_branches():
 def get_branch(branch_id):
     """View one branch after validating its path ID."""
     if _validate_branch_id(branch_id) is None:
-        return jsonify({"errors": {"branch_id": "Must be a positive integer."}}), 400
+        return error_response(
+            errors={"branch_id": "Must be a positive integer."}, status_code=400
+        )
 
     # Load this branch within the authenticated Owner's business so another
     # business's branch cannot be viewed.
@@ -67,7 +74,9 @@ def get_branch(branch_id):
 def deactivate_branch(branch_id):
     """Validate a branch deactivation request until auth and DB are ready."""
     if _validate_branch_id(branch_id) is None:
-        return jsonify({"errors": {"branch_id": "Must be a positive integer."}}), 400
+        return error_response(
+            errors={"branch_id": "Must be a positive integer."}, status_code=400
+        )
 
     # When implemented, require an authenticated Owner, load the branch within
     # that Owner's business, and set is_active to false. Keep its historical
@@ -87,8 +96,8 @@ def update_branch(branch_id):
     if json_error:
         if errors:
             errors["body"] = json_error
-            return jsonify({"errors": errors}), 400
-        return jsonify({"error": json_error}), 400
+            return error_response(errors=errors, status_code=400)
+        return error_response(json_error, status_code=400)
 
     if not data:
         errors["body"] = "Provide at least one field to update."
@@ -108,7 +117,7 @@ def update_branch(branch_id):
             errors[field] = "Must be a string."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
     # When the DB is added, update by branch_id AND the verified Owner's
     # business_id, and check name uniqueness within that same business.
@@ -120,7 +129,7 @@ def create_branch():
     """Validate branch data until Owner authentication and database support exist."""
     data, json_error = _read_json_object()
     if json_error:
-        return jsonify({"error": json_error}), 400
+        return error_response(json_error, status_code=400)
 
     errors = {}
 
@@ -136,14 +145,17 @@ def create_branch():
             errors[field] = "Must be a string."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
     # Once implemented, require an authenticated Owner and use that Owner's
     # trusted business_id. The database must reject duplicate names in that
     # business before creating the branch.
-    return jsonify({
-        "message": (
-            "Input is valid, but branch creation is unavailable until Owner "
-            "authentication and database integration are implemented."
-        )
-    }), 501
+    return json_response(
+        {
+            "message": (
+                "Input is valid, but branch creation is unavailable until Owner "
+                "authentication and database integration are implemented."
+            )
+        },
+        status_code=501,
+    )

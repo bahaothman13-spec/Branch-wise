@@ -1,6 +1,8 @@
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
+
+from response_helpers import error_response, json_response
 
 
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
@@ -13,11 +15,11 @@ EMAIL_PATTERN = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 def register():
     """Validate owner registration data without creating an account yet."""
     if not request.is_json:
-        return jsonify({"error": "Request body must be JSON."}), 400
+        return error_response("Request body must be JSON.", status_code=400)
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object."}), 400
+        return error_response("Request body must be a JSON object.", status_code=400)
 
     errors = {}
     required_fields = ("owner_name", "business_name", "email", "password")
@@ -42,22 +44,23 @@ def register():
         errors["password"] = f"Password must be at least {MIN_PASSWORD_LENGTH} characters long."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
-    return jsonify({
-        "message": "Input is valid, but registration is pending database integration."
-    }), 501
+    return json_response(
+        {"message": "Input is valid, but registration is pending database integration."},
+        status_code=501,
+    )
 
 
 @auth_bp.post("/login")
 def login():
     """Validate login data until database authentication is implemented."""
     if not request.is_json:
-        return jsonify({"error": "Request body must be JSON."}), 400
+        return error_response("Request body must be JSON.", status_code=400)
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object."}), 400
+        return error_response("Request body must be a JSON object.", status_code=400)
 
     errors = {}
     for field in ("email", "password"):
@@ -76,16 +79,18 @@ def login():
         errors["email"] = "Enter a valid email address."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
-    return jsonify({
-        "message": "Database authentication is not implemented yet."
-    }), 501
+    return json_response(
+        {"message": "Database authentication is not implemented yet."},
+        status_code=501,
+    )
 
 
 @auth_bp.post("/logout")
 def logout():
     """Prepare the logout endpoint until session management is implemented."""
-    return jsonify({
-        "message": "Logout is not available until session management is implemented."
-    }), 501
+    return json_response(
+        {"message": "Logout is not available until session management is implemented."},
+        status_code=501,
+    )

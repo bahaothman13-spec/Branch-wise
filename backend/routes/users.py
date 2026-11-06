@@ -1,6 +1,8 @@
 import re
 
-from flask import Blueprint, jsonify, request
+from flask import Blueprint, request
+
+from response_helpers import error_response, json_response
 
 
 users_bp = Blueprint("users", __name__, url_prefix="/api")
@@ -14,11 +16,11 @@ ALLOWED_ROLES = {"Branch Manager", "Employee"}
 def create_user():
     """Validate user creation data until authentication and database support exist."""
     if not request.is_json:
-        return jsonify({"error": "Request body must be JSON."}), 400
+        return error_response("Request body must be JSON.", status_code=400)
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object."}), 400
+        return error_response("Request body must be a JSON object.", status_code=400)
 
     errors = {}
     string_fields = ("name", "email", "role", "initial_password")
@@ -56,14 +58,17 @@ def create_user():
         )
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
-    return jsonify({
-        "message": (
-            "Input is valid, but user creation is unavailable until owner authentication "
-            "and database support are implemented."
-        )
-    }), 501
+    return json_response(
+        {
+            "message": (
+                "Input is valid, but user creation is unavailable until owner authentication "
+                "and database support are implemented."
+            )
+        },
+        status_code=501,
+    )
 
 
 @users_bp.patch("/users/<user_id>/status")
@@ -77,11 +82,11 @@ def update_user_status(user_id):
         errors["user_id"] = "Must be a positive integer."
 
     if not request.is_json:
-        return jsonify({"error": "Request body must be JSON."}), 400
+        return error_response("Request body must be JSON.", status_code=400)
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object."}), 400
+        return error_response("Request body must be a JSON object.", status_code=400)
 
     if "is_active" not in data:
         errors["is_active"] = "This field is required."
@@ -89,25 +94,28 @@ def update_user_status(user_id):
         errors["is_active"] = "Must be a Boolean value (true or false)."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
-    return jsonify({
-        "message": (
-            "Input is valid, but changing user status is unavailable until authentication "
-            "and database integration are implemented."
-        )
-    }), 501
+    return json_response(
+        {
+            "message": (
+                "Input is valid, but changing user status is unavailable until authentication "
+                "and database integration are implemented."
+            )
+        },
+        status_code=501,
+    )
 
 
 @users_bp.patch("/users/me/password")
 def change_my_password():
     """Validate password-change data until authentication and database support exist."""
     if not request.is_json:
-        return jsonify({"error": "Request body must be JSON."}), 400
+        return error_response("Request body must be JSON.", status_code=400)
 
     data = request.get_json(silent=True)
     if not isinstance(data, dict):
-        return jsonify({"error": "Request body must be a JSON object."}), 400
+        return error_response("Request body must be a JSON object.", status_code=400)
 
     errors = {}
     password_fields = ("current_password", "new_password", "confirm_password")
@@ -135,11 +143,14 @@ def change_my_password():
             errors["confirm_password"] = "Passwords do not match."
 
     if errors:
-        return jsonify({"errors": errors}), 400
+        return error_response(errors=errors, status_code=400)
 
-    return jsonify({
-        "message": (
-            "Input is valid, but changing passwords is unavailable until authentication "
-            "and database integration are implemented."
-        )
-    }), 501
+    return json_response(
+        {
+            "message": (
+                "Input is valid, but changing passwords is unavailable until authentication "
+                "and database integration are implemented."
+            )
+        },
+        status_code=501,
+    )
