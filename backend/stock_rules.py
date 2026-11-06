@@ -11,9 +11,8 @@ from enum import Enum
 from isolation_rules import (
     ACCESS_DENIED_MESSAGE,
     can_access_resource,
-    require_resource_access,
 )
-from permissions import INVENTORY_VIEW
+from permissions import INVENTORY_VIEW, is_valid_resource_scope
 from request_validation import is_positive_integer
 
 
@@ -145,7 +144,12 @@ def can_access_branch_variant_stock(
     is delegated to the existing isolation rules; request-provided identity or
     scope data must not be passed here as trusted context.
     """
-    if not is_positive_integer(getattr(branch_scope, "branch_id", None)):
+    if (
+        not is_valid_resource_scope(branch_scope)
+        or branch_scope.branch_id is None
+        or not is_valid_resource_scope(variant_scope)
+        or variant_scope.branch_id is not None
+    ):
         return False
     return can_access_resource(
         principal,
@@ -163,15 +167,13 @@ def require_branch_variant_stock_access(
     required_permission=INVENTORY_VIEW,
 ):
     """Raise the existing non-disclosing access error when stock is out of scope."""
-    if not is_positive_integer(getattr(branch_scope, "branch_id", None)):
-        raise PermissionError(ACCESS_DENIED_MESSAGE)
-
-    require_resource_access(
+    if not can_access_branch_variant_stock(
         principal,
-        required_permission,
         branch_scope,
-        related_scopes=(variant_scope,),
-    )
+        variant_scope,
+        required_permission=required_permission,
+    ):
+        raise PermissionError(ACCESS_DENIED_MESSAGE)
 
 
 __all__ = [

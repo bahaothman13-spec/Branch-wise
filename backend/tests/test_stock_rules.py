@@ -174,6 +174,24 @@ def test_stock_access_reuses_branch_business_and_variant_isolation_rules():
         )
 
 
+def test_stock_access_rejects_a_branch_scoped_variant_resource():
+    manager = make_principal()
+    owner = make_principal(Role.OWNER)
+    branch_22 = scope(branch_id=22)
+    branch_scoped_variant = scope(branch_id=23)
+
+    assert not can_access_branch_variant_stock(
+        manager, branch_22, branch_scoped_variant
+    )
+    assert not can_access_branch_variant_stock(
+        owner, branch_22, branch_scoped_variant
+    )
+    with pytest.raises(PermissionError):
+        require_branch_variant_stock_access(
+            manager, branch_22, branch_scoped_variant
+        )
+
+
 def test_stock_access_respects_role_permissions_for_deductions():
     manager = make_principal()
     assert can_access_branch_variant_stock(

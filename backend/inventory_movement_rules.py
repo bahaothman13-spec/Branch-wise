@@ -229,6 +229,10 @@ def _variant_resource_scopes(variant_scopes, variant_ids):
             variant_scope
         ):
             raise ValueError("Invalid trusted product or variant resource context.")
+        if product_scope.branch_id is not None or variant_scope.branch_id is not None:
+            raise ValueError(
+                "Product and variant resource contexts must be business-wide."
+            )
         resolved[variant_id] = (product_scope, variant_scope)
     return resolved
 

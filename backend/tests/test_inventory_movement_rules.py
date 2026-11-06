@@ -601,6 +601,23 @@ def test_unauthorized_business_branch_and_purchase_access_are_denied():
         )
 
 
+@pytest.mark.parametrize("dependency_index", [0, 1])
+def test_inventory_movements_require_business_wide_product_and_variant_scopes(
+    dependency_index,
+):
+    scopes = list(variant_scopes()[VARIANT_ID])
+    scopes[dependency_index] = scope(branch_id=DESTINATION_BRANCH_ID)
+
+    with pytest.raises(ValueError, match="must be business-wide"):
+        build_sale_movements(
+            principal(),
+            actor_id=ACTOR_ID,
+            sale=sale(),
+            branch_scope=branch_scope(),
+            variant_scopes={VARIANT_ID: tuple(scopes)},
+        )
+
+
 def test_transfer_dispatch_and_receipt_require_access_at_their_respective_branch():
     args = {
         "actor_id": ACTOR_ID,
@@ -630,6 +647,26 @@ def test_transfer_dispatch_and_receipt_require_access_at_their_respective_branch
             ],
             dispatched_items=[{"product_variant_id": VARIANT_ID, "quantity": 2}],
             **args,
+        )
+
+
+@pytest.mark.parametrize("dependency_index", [0, 1])
+def test_transfer_movements_reject_branch_scoped_product_or_variant(
+    dependency_index,
+):
+    scopes = list(variant_scopes()[VARIANT_ID])
+    scopes[dependency_index] = scope(branch_id=DESTINATION_BRANCH_ID)
+
+    with pytest.raises(ValueError, match="must be business-wide"):
+        build_transfer_dispatch_movements(
+            principal(),
+            actor_id=ACTOR_ID,
+            transfer_id=930,
+            current_status=TransferStatus.PENDING,
+            source_branch_scope=branch_scope(SOURCE_BRANCH_ID),
+            destination_branch_scope=branch_scope(DESTINATION_BRANCH_ID),
+            variant_scopes={VARIANT_ID: tuple(scopes)},
+            items=[{"product_variant_id": VARIANT_ID, "quantity": 1}],
         )
 
 
