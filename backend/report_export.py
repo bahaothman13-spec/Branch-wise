@@ -6,7 +6,7 @@ These column keys are supplied by the caller; they do not define a report schema
 import csv
 from io import StringIO
 import math
-
+from decimal import Decimal
 
 def _csv_cell(value):
     """Accept simple values and protect text intended for spreadsheet viewing."""
@@ -14,6 +14,11 @@ def _csv_cell(value):
         return ""
     if isinstance(value, (bool, int)):
         return value
+
+    if isinstance(value, Decimal):
+        if not value.is_finite():
+            raise ValueError("Report numbers must be finite.")
+        return str(value)
     if isinstance(value, float):
         if not math.isfinite(value):
             raise ValueError("Report numbers must be finite.")
