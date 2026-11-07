@@ -14,6 +14,7 @@ from typing import Protocol
 from onboarding_rules import OnboardingStatus, get_onboarding_status
 from permissions import AuthenticatedPrincipal, is_trusted_principal
 from request_validation import is_positive_integer
+from repository_contracts import RepositoryConflictError, RepositoryPersistenceError
 from security import hash_password, verify_password
 from session_auth import IssuedSession, SessionManager, TrustedSessionUser
 
@@ -21,11 +22,11 @@ from session_auth import IssuedSession, SessionManager, TrustedSessionUser
 AUTH_REPOSITORY_EXTENSION = "branchwise.auth_repository"
 
 
-class AuthPersistenceError(Exception):
+class AuthPersistenceError(RepositoryPersistenceError):
     """A persistence adapter could not complete an authentication operation."""
 
 
-class DuplicateEmailError(AuthPersistenceError):
+class DuplicateEmailError(RepositoryConflictError):
     """The repository rejected an owner registration for an existing email."""
 
 
@@ -59,7 +60,9 @@ class AuthRepository(Protocol):
     create one business and one Owner with no branch in one transaction; a
     uniqueness constraint remains authoritative under concurrent requests.
     Production implementations must expose ``is_persistent = True`` and use a
-    durable store. There is intentionally no default implementation.
+    durable store. Duplicate email raises ``DuplicateEmailError``; unexpected
+    adapter failures use ``AuthPersistenceError``. There is intentionally no
+    default implementation.
     """
 
     def find_user_by_email(self, email: str) -> AuthAccount | None:

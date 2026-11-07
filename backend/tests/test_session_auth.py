@@ -385,6 +385,18 @@ def test_csrf_requires_matching_session_bound_cookie_and_header(auth_components)
     assert not manager.csrf_token_is_valid(context, None, issued.csrf_token)
 
 
+def test_authenticated_context_exposes_the_consistent_login_version_snapshot():
+    store = MemorySessionStore()
+    user = make_user(access_version=6)
+    manager = SessionManager(store, lambda _user_id: user)
+    issued = manager.create_session(user)
+
+    context = manager.resolve_session(issued.session_token)
+
+    assert context.access_version_at_login == 6
+    assert next(iter(store.records.values())).access_version_at_login == 6
+
+
 def make_protected_app(manager=None):
     app = Flask(__name__)
     if manager is not None:

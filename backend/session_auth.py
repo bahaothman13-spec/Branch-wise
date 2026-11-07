@@ -69,7 +69,12 @@ class SessionStore(Protocol):
 
     A production implementation must declare ``is_persistent = True`` and
     ``is_shared = True`` so the installer can reject test-local, in-memory, or
-    worker-local stores in production.
+    worker-local stores in production. With the approved ``auth_sessions``
+    table, ``get`` must ignore rows whose ``revoked_at`` is set and ``delete``
+    means immediate logical revocation (``revoked_at``), not physical deletion.
+    ``put`` maps the digest to ``session_token_hash`` and the snapshot to
+    ``access_version_at_login``; it must verify the user is still active and
+    has that version before committing the session.
     """
 
     def get(self, token_digest: str) -> SessionRecord | None:
@@ -79,7 +84,7 @@ class SessionStore(Protocol):
         """Create or replace a record under its token digest."""
 
     def delete(self, token_digest: str) -> None:
-        """Delete a record, making that session unusable immediately."""
+        """Revoke a record, making it unusable immediately and idempotently."""
 
 
 @dataclass(frozen=True)
@@ -97,6 +102,7 @@ class AuthenticatedSession:
     """Trusted request context resolved from a valid server-side session."""
 
     user_id: int
+    access_version_at_login: int
     principal: AuthenticatedPrincipal
     expires_at: datetime
     _session_token_digest: str = field(repr=False)
@@ -235,6 +241,7 @@ class SessionManager:
 
         return AuthenticatedSession(
             user_id=user.user_id,
+            access_version_at_login=record.access_version_at_login,
             principal=user.principal,
             expires_at=expires_at,
             _session_token_digest=digest,
