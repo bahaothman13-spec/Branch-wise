@@ -1,24 +1,25 @@
 # BE-10 Part 1: Session Authentication Foundation
 
 This document describes the reusable authentication foundation in
-`session_auth.py`. It does not claim that login, logout, or protected API
-authentication is active. The existing `/api/auth/login` and
-`/api/auth/logout` endpoints remain pending implementation, and
-`create_app()` does not install a session manager.
+`session_auth.py` and the route orchestration in `auth_workflows.py` and
+`routes/auth.py`. The default `create_app()` installs no authentication,
+session, or rate-limit adapters; without them, the routes retain their
+explicit `501` behavior. No MySQL persistence adapter is implemented here.
 
 ## Reused security and authorization rules
 
 - `security.py` already provides Werkzeug password hashing and verification.
-  A later login flow should use `verify_password`; this foundation does not
-  inspect credentials or add another password mechanism.
+  `auth_workflows.py` reuses `verify_password` and `hash_password`; it adds no
+  second password mechanism.
 - `permissions.py` already defines `AuthenticatedPrincipal`, the role matrix,
   and fail-closed trust checks. The future database user loader must build a
   fresh principal from stored role, business, branch, and permission data.
 - `isolation_rules.py` and `onboarding_rules.py` continue to consume that
   trusted principal and server-loaded resource scopes. Session validation does
   not change those policies.
-- Existing API response shapes and the current `400`/`501` authentication
-  endpoint behavior are unchanged.
+- Without explicitly installed adapters, the existing validation and `501`
+  authentication responses are unchanged. Configured workflows use the
+  response shapes listed in `API_CONTRACT.md`.
 
 ## Session behavior
 
@@ -34,9 +35,23 @@ authentication is active. The existing `/api/auth/login` and
   Missing, disabled, deleted, malformed, or version-mismatched users invalidate
   and delete the session. The returned principal therefore reflects current
   server-side role and branch assignments, not cookie or request values.
-- Logout support is provided at the service level by deleting the server-side
-  record. Cookie clearing uses the same path and security attributes. The API
-  logout route is not connected yet.
+- `auth_workflows.py` defines the `AuthRepository` boundary for case-insensitive
+  email lookup and atomic Owner/business registration. It creates no model or
+  persistence adapter. A production repository must persist the business and
+  branchless Owner in one transaction, enforce email uniqueness under
+  concurrency, and return trusted principal and business-scoped branch-count
+  data for login.
+- Login orchestration uses the repository's stored hash and `access_version`,
+  the existing `SessionManager`, and `onboarding_rules.py`. Successful login
+  sets the existing secure session/CSRF cookies and reports when an Owner must
+  create the first branch. Registration never creates a session or branch.
+- Logout is connected when a session manager is installed. It requires the
+  existing session and CSRF checks, revokes the server-side record, and clears
+  both cookies. A missing manager preserves the existing `501` response.
+- The route requires the existing `LoginRateLimiter` as well as account and
+  session adapters. The limiter fails closed if its shared store errors. In
+  production, adapter installers require an explicit `is_persistent = True`
+  declaration; no in-memory production fallback is provided.
 - There is no production in-memory fallback. `SessionStore` is an interface;
   the only in-memory implementation in this change is local to pytest.
 
@@ -51,10 +66,10 @@ itself. Both cookies set `Secure` when called with `production=True`. No
 
 BE-51 adds app configuration validation: production requires
 `APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
-When cookie issuance is integrated, pass the validated secure-cookie setting
-to this helper (or `production=True`). Production must serve cookies only over
-HTTPS. The deployment's TLS terminator must enforce HTTPS; HSTS is left to that
-terminator because this app does not yet know the trusted proxy/TLS setup.
+The login route passes the validated secure-cookie setting to the cookie
+helper. Production must serve cookies only over HTTPS. The deployment's TLS
+terminator must enforce HTTPS; HSTS is left to that terminator because this app
+does not yet know the trusted proxy/TLS setup.
 
 `require_authenticated_session` resolves identity only from the session cookie.
 It checks that unsafe methods (`POST`, `PUT`, `PATCH`, `DELETE`, and other
@@ -64,7 +79,8 @@ server-side record. `GET`, `HEAD`, and `OPTIONS` do not require CSRF. The
 decorator exposes the trusted context as `g.authenticated_session`.
 
 The decorator returns `401` when no valid session manager or session exists,
-and `403` for a failed CSRF check. It is not attached to any current route.
+and `403` for a failed CSRF check. It protects the logout route when a session
+manager is installed; business routes are not yet decorated.
 
 There is no application CORS configuration. Browser clients must use the same
 origin when cookie sessions are integrated unless a reviewed exact-origin
@@ -77,32 +93,39 @@ the session-bound mechanism above; BE-51 does not introduce another one.
    (atomic create/replace/delete, expiry cleanup, backup/retention, and access
    control). This change creates no database tables and chooses no storage
    product.
-2. Add a monotonic per-user `auth_version` (or equivalent credential version)
-   to the approved user schema. Increment it in the same transaction as
+2. Add a monotonic per-user `access_version` (or equivalent credential
+   version) to the approved user schema. The auth repository maps it to the
+   session layer's `auth_version`. Increment it in the same transaction as
    password changes/resets and account disable/delete changes. Incrementing it
    after reactivation prevents an old pre-disable session from becoming valid
    again. A version mismatch lazily invalidates every session for that user.
 3. Implement the user loader so it fetches the account on each validation,
-   checks active/deleted state and `auth_version`, then constructs the
+   checks active/deleted state and the current `access_version` against the
+   session's saved version, then constructs the
    `AuthenticatedPrincipal` from current trusted database values. Never accept
    user IDs, roles, business IDs, branch assignments, or permissions from a
    request as the loader's authority.
-4. Implement login only after approved account lookup is available: validate
-   input, verify the stored password with `security.verify_password`, reject
-   inactive/deleted accounts, then call `SessionManager.create_session` and
-   set cookies. Do not issue sessions for placeholder credentials.
-5. Integrate logout as a CSRF-protected state-changing request: revoke the
-   presented server-side token and clear both cookies. Preserve the approved
-   response contract when the endpoint is implemented.
-6. Integrate password change and user status changes with `auth_version`
+4. Implement the production `AuthRepository`: canonical email lookup, atomic
+   Owner/business creation without a branch, duplicate-email enforcement,
+   stored password hash and access version, trusted principal, and business
+   branch count. The route workflow is prepared but no adapter is configured.
+5. Install production repository, `SessionStore`/user loader, and atomic shared
+   rate-limit store/key only after those adapters are approved. The route
+   already verifies credentials, rejects inactive/deleted accounts, issues
+   sessions, sets cookies, enforces the limiter, and reports first-branch
+   onboarding when all adapters exist.
+6. Logout orchestration is connected as a CSRF-protected state-changing
+   request: it revokes the presented server-side token and clears both cookies
+   when session persistence is installed.
+7. Integrate password change and user status changes with `access_version`
    increments, and explicitly decide whether role or branch reassignment should
    also force reauthentication. Fresh user loading already applies current
    permissions on the next request.
-7. Configure production deployment so TLS is terminated safely and the cookie
+8. Configure production deployment so TLS is terminated safely and the cookie
    helper receives `production=True`; choose the deployment's approved CSRF
    token delivery to same-origin browser code before activating state-changing
    routes.
 
-Until those pieces are integrated, the current login/logout routes and other
-API routes retain their existing behavior and no session-based API access is
-active.
+Until production adapters are configured, the default login/register/logout
+routes retain explicit `501` behavior. No session-based access to business API
+routes is active.

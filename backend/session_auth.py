@@ -65,7 +65,11 @@ class SessionRecord:
 
 
 class SessionStore(Protocol):
-    """Minimal interface for an approved persistent server-side session store."""
+    """Minimal interface for an approved persistent server-side session store.
+
+    A production implementation must declare ``is_persistent = True`` so the
+    installer can reject test-local or in-memory stores in production.
+    """
 
     def get(self, token_digest: str) -> SessionRecord | None:
         """Return the record for a token digest, or ``None`` if absent."""
@@ -289,6 +293,12 @@ def install_session_auth(
     ``create_app`` intentionally does not call this until a persistent store
     and authoritative database user loader have been approved and integrated.
     """
+    if (
+        app.config.get("APP_ENV") == "production"
+        and getattr(store, "is_persistent", False) is not True
+    ):
+        raise ValueError("Production sessions require persistent storage.")
+
     manager = SessionManager(
         store,
         user_loader,

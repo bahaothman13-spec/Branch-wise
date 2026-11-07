@@ -83,31 +83,36 @@ The current app factory validates security configuration. Production must set
 `APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
 `MAX_CONTENT_LENGTH` defaults to 1 MiB. Login limit defaults are 5 attempts per
 normalized identifier and 30 per client address in 15 minutes, but the prepared
-rules are not installed on `/api/auth/login`. They require an injected atomic,
-shared `RateLimitStore` and a secret key before integration.
+rules run on `/api/auth/login` only when an atomic, shared `RateLimitStore` and
+a key secret of at least 32 bytes are explicitly installed. A missing or failed
+limiter fails closed; the default app does not install one.
 
-These foundations do **not** authenticate or authorize the existing API
-routes. Login and logout remain placeholders; session persistence, trusted
-database identity loading, route-level authentication/RBAC/business isolation,
-production rate-limit storage, and MySQL integration remain pending. The
-existing CSRF helper in `session_auth.py` is reserved for future session-backed
-state-changing routes and is not duplicated here.
+The authentication routes now orchestrate registration, credential checking,
+session issuance, and logout when explicitly supplied with an `AuthRepository`,
+`SessionManager` backed by a persistent `SessionStore`, and the login limiter.
+`create_app()` installs none of these adapters, so the default routes retain
+their explicit `501` responses. No production repository, session store, or
+rate-limit store is configured. Session-backed authentication is not attached
+to business routes; their route-level RBAC and tenant isolation remain pending.
+The existing CSRF helper in `session_auth.py` is reused for logout.
 
 ## HTTP status codes
 
 | Status | Meaning and use |
 | --- | --- |
 | `200` | Request completed successfully; used by `/api/health`. |
-| `201` | A resource was created successfully. None of the current create routes reaches this state yet. |
+| `201` | A resource was created successfully. Owner registration returns this only when its repository completes the atomic write. |
 | `400` | Malformed request, invalid JSON shape, or current field/path validation failure. Existing validation endpoints use this status for compatibility. |
-| `401` | Authentication is missing or invalid. The current Flask routes do not yet authenticate requests. |
-| `403` | The authenticated user lacks permission for an operation. Authorization policy is described in `backend/ROLE_PERMISSIONS.md`; the current routes do not enforce it yet. |
+| `401` | Authentication is missing or invalid. Login returns this for invalid credentials; logout returns it for a missing or invalid session. Other business routes are not yet protected. |
+| `403` | An authenticated user lacks permission, or a session-backed state change fails CSRF validation. Logout uses the latter; business-route RBAC is not yet active. |
 | `404` | The route or resource was not found. Unknown routes return a generic JSON error. When resource scoping is implemented, use `404` for inaccessible cross-business resources if revealing their existence would leak information. |
-| `409` | A request conflicts with existing state, such as a duplicate business-scoped branch name or an invalid state transition. No current route emits it. |
+| `409` | A request conflicts with existing state, including duplicate email during owner registration. |
+| `429` | Login attempts exceeded an installed account or client rate limit. |
 | `413` | Request body exceeds the configured maximum size; returns a generic JSON error. |
 | `422` | A syntactically valid request fails semantic validation. Existing validation uses `400`; retain that behavior unless a contract change is approved. |
 | `500` | Unexpected server failure. The response is generic and must not include an exception, stack trace, SQL, credentials, or password. |
 | `501` | The endpoint is recognized but its operation is not implemented. Several current endpoints use this while authentication or database support is pending. |
+| `503` | Login rate-limit persistence is unavailable; authentication fails closed. |
 
 Validation errors are returned as a field-to-message object under `errors`.
 Authorization failures should use `401` for missing/invalid identity and `403`
@@ -152,9 +157,9 @@ future list behavior, not features already implemented.
 | Method and path | Current behavior |
 | --- | --- |
 | `GET /api/health` | Returns `200` with `{"status":"ok"}`. |
-| `POST /api/auth/register` | Accepts `owner_name`, `business_name`, `email`, and `password`; validates input (`400` on invalid input); otherwise returns `501` pending database integration. |
-| `POST /api/auth/login` | Accepts `email` and `password`; validates input (`400` on invalid input); otherwise returns `501` pending authentication integration. |
-| `POST /api/auth/logout` | Returns `501` pending session management. |
+| `POST /api/auth/register` | Accepts `owner_name`, `business_name`, `email`, and `password`; validates input (`400`); when an `AuthRepository` is installed, atomically creates the Owner and business without a branch (`201`), or returns `409` for a duplicate email. Without a repository it retains `501`. |
+| `POST /api/auth/login` | Accepts `email` and `password`; validates input (`400`); requires installed account, session, and rate-limit adapters. Invalid or inactive credentials return `401`, rate limiting returns `429`, and success sets session and CSRF cookies and reports whether first-branch onboarding is required. Missing adapters retain `501`. |
+| `POST /api/auth/logout` | Requires an installed session manager, valid session, and CSRF cookie/header match; revokes the session and clears both cookies. Missing session management retains `501`; unauthenticated requests return `401`. |
 | `GET /api/branches` | Returns `501` pending authentication and database integration. |
 | `POST /api/branches` | Accepts `name`, `address`, `phone`, and `notes`; validates input (`400` on invalid input); otherwise returns `501`. |
 | `GET /api/branches/{branch_id}` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |

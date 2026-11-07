@@ -14,6 +14,9 @@ from dataclasses import dataclass
 from typing import Protocol
 
 
+LOGIN_RATE_LIMIT_EXTENSION = "branchwise.rate_limiter"
+
+
 @dataclass(frozen=True)
 class LoginRateLimitConfig:
     """Attempt limits applied per normalized account and per client address."""
@@ -55,7 +58,8 @@ class RateLimitStore(Protocol):
 
     The store increments a bucket within a fixed window and returns whether
     the attempt is allowed. A production implementation must share counters
-    across all API workers and expire old buckets reliably.
+    across all API workers, expire old buckets reliably, and declare
+    ``is_persistent = True`` for installation in production.
     """
 
     def consume(
@@ -132,9 +136,32 @@ class LoginRateLimiter:
         return normalized
 
 
+def install_login_rate_limiter(
+    app,
+    store: RateLimitStore,
+    key_secret: bytes,
+    config: LoginRateLimitConfig | None = None,
+) -> LoginRateLimiter:
+    """Install the prepared limiter with an explicitly supplied shared store.
+
+    Production stores must be durable and shared across workers. There is no
+    local-memory fallback, and the key secret is never read from a default.
+    """
+    if (
+        app.config.get("APP_ENV") == "production"
+        and getattr(store, "is_persistent", False) is not True
+    ):
+        raise ValueError("Production rate limiting requires persistent storage.")
+    limiter = LoginRateLimiter(store, key_secret, config)
+    app.extensions[LOGIN_RATE_LIMIT_EXTENSION] = limiter
+    return limiter
+
+
 __all__ = [
     "LoginRateLimitConfig",
     "LoginRateLimiter",
+    "LOGIN_RATE_LIMIT_EXTENSION",
     "RateLimitDecision",
     "RateLimitStore",
+    "install_login_rate_limiter",
 ]

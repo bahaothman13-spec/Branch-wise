@@ -50,19 +50,25 @@ HSTS must be configured at the TLS-terminating ingress once HTTPS is assured.
 
 ## Awaiting integration
 
-- `/api/auth/login` remains a placeholder and does not invoke the prepared
-  limiter. Before enabling it, provide a reliable atomic shared store suitable
-  for every production worker and a secret of at least 32 bytes for HMAC bucket
-  keys. Store failure must fail closed; it must not fall back to local memory.
-- There is no real credential lookup, password verification on the route,
-  session issuance, logout revocation, persistent session store, or trusted
-  database user loader.
+- `/api/auth/login` invokes the prepared limiter and authentication workflow
+  only when the account repository, session manager, and limiter are explicitly
+  installed. The default app installs none, so it retains `501`. Production
+  requires a reliable atomic shared store for every worker and a secret of at
+  least 32 bytes. Store failure returns `503` before credential lookup; there
+  is no local-memory fallback.
+- `auth_workflows.py` defines the repository contract and uses the existing
+  password helpers, `SessionManager`, and onboarding policy. No real account,
+  session, or rate-limit persistence adapter is configured. Production adapter
+  installers require an explicit persistent-store declaration.
+- Logout uses the existing session and CSRF checks to revoke the session and
+  clear cookies when a session manager is installed; without it, the route
+  retains `501`.
 - Current business routes are not decorated with authentication or
   authorization. The existing RBAC and isolation rules remain reusable policy
   code, not active route protection.
 - No MySQL connection, schema, or database-backed rate/session store was added.
-- CSRF checks are provided by `session_auth.py` for future decorated session
-  routes only; current routes do not have authenticated sessions.
+- CSRF checks from `session_auth.py` protect logout when sessions are installed.
+  Other business routes do not have authenticated sessions.
 - CORS remains disabled. If deployment later needs cross-origin browser access,
   define and validate exact trusted origins and never use wildcard CORS with
   credentials.
