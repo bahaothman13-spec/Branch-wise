@@ -96,7 +96,7 @@ def make_session_manager(store, account):
             return None
         return TrustedSessionUser(
             user_id=account.user_id,
-            auth_version=account.access_version,
+            access_version=account.access_version,
             is_active=account.is_active,
             is_deleted=account.is_deleted,
             principal=account.principal,
@@ -194,7 +194,7 @@ def test_login_issues_session_with_access_version_and_first_branch_status():
     assert len(store.records) == 1
     record = next(iter(store.records.values()))
     assert record.user_id == account.user_id
-    assert record.auth_version == 9
+    assert record.access_version_at_login == 9
     assert outcome.issued_session.session_token not in store.records
 
 

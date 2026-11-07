@@ -1,0 +1,214 @@
+{
+  "info": {
+    "name": "BranchWise Authentication API",
+    "description": "Authentication endpoints currently defined by the BranchWise API contract. Requests and validation behavior can be exercised without MySQL. Successful registration requires a configured persistent AuthRepository backed by MySQL. Successful login additionally requires a persistent SessionStore and an atomic shared rate-limit store. Logout requires a live session plus a matching CSRF cookie and X-CSRF-Token header. The default application installs none of these adapters, so successful auth operations currently return 501. The fake adapters in pytest are test-only and are not available to Postman.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    },
+    {
+      "key": "owner_name",
+      "value": "Test Owner",
+      "type": "string"
+    },
+    {
+      "key": "business_name",
+      "value": "Test Business",
+      "type": "string"
+    },
+    {
+      "key": "email",
+      "value": "owner@example.com",
+      "type": "string"
+    },
+    {
+      "key": "password",
+      "value": "replace-with-a-test-password",
+      "type": "string"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Register Owner and Business",
+      "description": "POST /api/auth/register. Expected: 201 with owner_created/business_created true and branch_created false; 400 for invalid input; 409 for a duplicate email; 500 for a persistence error; 501 when no AuthRepository is installed. Production success requires the not-yet-configured persistent AuthRepository backed by MySQL. Registration does not create a session or branch.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"owner_name\": \"{{owner_name}}\",\n  \"business_name\": \"{{business_name}}\",\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/auth/register",
+        "description": "Creates one Owner and one business atomically; it does not create a branch or log the Owner in. Requires the MySQL-backed persistent AuthRepository for successful production registration."
+      },
+      "response": [
+        {
+          "name": "201 Created — example success",
+          "status": "Created",
+          "code": 201,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"data\": {\n    \"owner_created\": true,\n    \"business_created\": true,\n    \"branch_created\": false\n  },\n  \"message\": \"Registration successful.\"\n}"
+        },
+        {
+          "name": "409 Conflict — duplicate email",
+          "status": "Conflict",
+          "code": 409,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"error\": \"An account with this email already exists.\"\n}"
+        },
+        {
+          "name": "501 Not Implemented — no repository",
+          "status": "Not Implemented",
+          "code": 501,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"message\": \"Input is valid, but registration is pending database integration.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Login",
+      "description": "POST /api/auth/login. Expected: 200 with onboarding status and branchwise_session plus branchwise_csrf cookies; 400 for invalid input; 401 for invalid credentials; 429 when limited; 500/503 for persistence failures; 501 when required adapters are missing. Production login requires the not-yet-configured MySQL-backed AuthRepository, persistent SessionStore, and atomic shared rate-limit store. Postman retains the cookies for Logout. Import backend/postman/BranchWise-Local.postman_environment.json for baseUrl, owner_name, business_name, email, password, and csrf_token, or edit the collection variables in the Variables tab.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"{{email}}\",\n  \"password\": \"{{password}}\"\n}",
+          "options": {
+            "raw": {
+              "language": "json"
+            }
+          }
+        },
+        "url": "{{baseUrl}}/api/auth/login",
+        "description": "Successful production login requires MySQL-backed account lookup plus persistent session and shared rate-limit stores."
+      },
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "const csrf = pm.cookies.get('branchwise_csrf');",
+              "if (csrf) {",
+              "  pm.collectionVariables.set('csrf_token', csrf);",
+              "  if (pm.environment && pm.environment.name) pm.environment.set('csrf_token', csrf);",
+              "}"
+            ]
+          }
+        }
+      ],
+      "response": [
+        {
+          "name": "200 OK — example success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            { "key": "Content-Type", "value": "application/json" },
+            { "key": "Set-Cookie", "value": "branchwise_session=<opaque>; HttpOnly; SameSite=Lax; Path=/api; Max-Age=43200" },
+            { "key": "Set-Cookie", "value": "branchwise_csrf=<token>; SameSite=Lax; Path=/api; Max-Age=43200" }
+          ],
+          "cookie": [],
+          "body": "{\n  \"data\": {\n    \"onboarding\": {\n      \"required\": true,\n      \"message\": \"Create the first branch for your business to complete onboarding.\"\n    }\n  },\n  \"message\": \"Login successful.\"\n}"
+        },
+        {
+          "name": "401 Unauthorized — invalid credentials",
+          "status": "Unauthorized",
+          "code": 401,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"error\": \"Invalid email or password.\"\n}"
+        },
+        {
+          "name": "501 Not Implemented — missing adapters",
+          "status": "Not Implemented",
+          "code": 501,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"message\": \"Database authentication is not implemented yet.\"\n}"
+        }
+      ]
+    },
+    {
+      "name": "Logout",
+      "description": "POST /api/auth/logout. Expected: 200 after revoking a live session; 401 if unauthenticated; 403 if the CSRF cookie and X-CSRF-Token header are missing or do not match; 500 on revocation failure; 501 when no session manager is installed. Requires the same CSRF value in the branchwise_csrf cookie and X-CSRF-Token header. Keep Postman on the same host as Login so its cookie jar sends both auth cookies. Successful production logout requires the not-yet-configured persistent session adapter.",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "X-CSRF-Token",
+            "value": "{{csrf_token}}"
+          }
+        ],
+        "url": "{{baseUrl}}/api/auth/logout",
+        "description": "Sends the session cookie from Postman's cookie jar and the CSRF header captured after Login."
+      },
+      "response": [
+        {
+          "name": "200 OK — example success",
+          "status": "OK",
+          "code": 200,
+          "_postman_previewlanguage": "json",
+          "header": [
+            { "key": "Content-Type", "value": "application/json" },
+            { "key": "Set-Cookie", "value": "branchwise_session=; Expires=<past date>; HttpOnly; SameSite=Lax; Path=/api" },
+            { "key": "Set-Cookie", "value": "branchwise_csrf=; Expires=<past date>; SameSite=Lax; Path=/api" }
+          ],
+          "cookie": [],
+          "body": "{\n  \"message\": \"Logout successful.\"\n}"
+        },
+        {
+          "name": "403 Forbidden — CSRF validation failed",
+          "status": "Forbidden",
+          "code": 403,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"error\": \"CSRF validation failed.\"\n}"
+        },
+        {
+          "name": "501 Not Implemented — no session manager",
+          "status": "Not Implemented",
+          "code": 501,
+          "_postman_previewlanguage": "json",
+          "header": [{ "key": "Content-Type", "value": "application/json" }],
+          "cookie": [],
+          "body": "{\n  \"message\": \"Logout is not available until session management is implemented.\"\n}"
+        }
+      ]
+    }
+  ]
+}

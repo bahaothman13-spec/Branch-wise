@@ -48,7 +48,7 @@ class TrustedSessionUser:
     """
 
     user_id: int
-    auth_version: int
+    access_version: int
     is_active: bool
     is_deleted: bool
     principal: AuthenticatedPrincipal
@@ -59,7 +59,7 @@ class SessionRecord:
     """Minimal server-side session data; never serialize this into a cookie."""
 
     user_id: int
-    auth_version: int
+    access_version_at_login: int
     expires_at: datetime
     csrf_token_digest: str = field(repr=False)
 
@@ -126,8 +126,8 @@ def _valid_trusted_user(user: object) -> bool:
     return (
         type(user) is TrustedSessionUser
         and is_positive_integer(user.user_id)
-        and type(user.auth_version) is int
-        and user.auth_version >= 0
+        and type(user.access_version) is int
+        and user.access_version >= 0
         and type(user.is_active) is bool
         and type(user.is_deleted) is bool
         and is_trusted_principal(user.principal)
@@ -188,7 +188,7 @@ class SessionManager:
                 digest,
                 SessionRecord(
                     user_id=user.user_id,
-                    auth_version=user.auth_version,
+                    access_version_at_login=user.access_version,
                     expires_at=expires_at,
                     csrf_token_digest=_token_digest(csrf_token),
                 ),
@@ -227,7 +227,7 @@ class SessionManager:
             or not user.is_active
             or user.is_deleted
             or user.user_id != record.user_id
-            or user.auth_version != record.auth_version
+            or user.access_version != record.access_version_at_login
         ):
             self._store.delete(digest)
             return None
@@ -270,8 +270,8 @@ class SessionManager:
         return (
             type(record) is SessionRecord
             and is_positive_integer(record.user_id)
-            and type(record.auth_version) is int
-            and record.auth_version >= 0
+            and type(record.access_version_at_login) is int
+            and record.access_version_at_login >= 0
             and isinstance(record.expires_at, datetime)
             and record.expires_at.tzinfo is not None
             and record.expires_at.utcoffset() is not None

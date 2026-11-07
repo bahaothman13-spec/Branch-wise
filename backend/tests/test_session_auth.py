@@ -72,14 +72,14 @@ def make_principal(
 def make_user(
     *,
     user_id=7,
-    auth_version=1,
+    access_version=1,
     is_active=True,
     is_deleted=False,
     principal=None,
 ):
     return TrustedSessionUser(
         user_id=user_id,
-        auth_version=auth_version,
+        access_version=access_version,
         is_active=is_active,
         is_deleted=is_deleted,
         principal=principal or make_principal(),
@@ -154,7 +154,7 @@ def test_record_contains_only_minimal_non_authorization_session_data(
     assert type(record) is SessionRecord
     assert {field.name for field in fields(record)} == {
         "user_id",
-        "auth_version",
+        "access_version_at_login",
         "expires_at",
         "csrf_token_digest",
     }
@@ -172,7 +172,7 @@ def test_record_contains_only_minimal_non_authorization_session_data(
         make_user(is_active=False),
         make_user(is_deleted=True),
         make_user(user_id=True),
-        make_user(auth_version=True),
+        make_user(access_version=True),
         make_user(principal=make_principal("Owner")),
         make_user(principal=make_principal(business_id=True)),
     ],
@@ -265,14 +265,14 @@ def test_user_id_mismatch_from_user_loader_revokes_session(auth_components):
     assert digest not in store.records
 
 
-def test_auth_version_change_invalidates_sessions_after_password_change(
+def test_access_version_change_invalidates_sessions_after_account_change(
     auth_components,
 ):
     store, _user, _loaded, clock, _manager = auth_components
-    current_user = {"value": make_user(auth_version=3)}
+    current_user = {"value": make_user(access_version=3)}
     manager = SessionManager(store, lambda _user_id: current_user["value"], clock=clock)
     issued = manager.create_session(current_user["value"])
-    current_user["value"] = make_user(auth_version=4)
+    current_user["value"] = make_user(access_version=4)
     digest = next(iter(store.records))
 
     assert manager.resolve_session(issued.session_token) is None

@@ -38,8 +38,9 @@ class AuthAccount:
     """Trusted credential data returned by an authentication repository.
 
     ``principal`` and ``business_branch_count`` must come from server-side,
-    business-scoped data. ``access_version`` is mapped to the existing
-    session layer's ``auth_version`` and must change when access is revoked.
+    business-scoped data. The approved ``users.access_version`` is copied into
+    each session's ``access_version_at_login`` value, matching the approved
+    ``auth_sessions.access_version_at_login`` storage contract.
     """
 
     user_id: int
@@ -171,7 +172,7 @@ def authenticate_user(
 
     trusted_user = TrustedSessionUser(
         user_id=account.user_id,
-        auth_version=account.access_version,
+        access_version=account.access_version,
         is_active=account.is_active,
         is_deleted=account.is_deleted,
         principal=account.principal,

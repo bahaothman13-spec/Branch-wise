@@ -96,6 +96,24 @@ rate-limit store is configured. Session-backed authentication is not attached
 to business routes; their route-level RBAC and tenant isolation remain pending.
 The existing CSRF helper in `session_auth.py` is reused for logout.
 
+Session invalidation uses the approved version names: the account repository
+supplies `users.access_version`, each session snapshots it as
+`access_version_at_login`, and the persistent adapter maps that snapshot to
+`auth_sessions.access_version_at_login`. A mismatch against the freshly loaded
+user deletes and rejects the session. This is application behavior only; it
+does not create or alter database schema.
+
+The Postman collection is `backend/postman/BranchWise-Authentication.postman_collection.json`;
+the companion local environment is `backend/postman/BranchWise-Local.postman_environment.json`.
+The variables provide `baseUrl`, `owner_name`, `business_name`, `email`,
+`password`, and `csrf_token`; the Login request captures the readable CSRF
+cookie for Logout, while Postman's cookie jar retains both auth cookies. Saved
+response examples document successful and common failure responses.
+Successful registration, login, and logout require persistent MySQL-backed
+adapters; the default app deliberately returns `501` when the required
+adapters are absent. Pytest fakes are local to tests and cannot be used by
+Postman.
+
 ## HTTP status codes
 
 | Status | Meaning and use |
@@ -157,9 +175,9 @@ future list behavior, not features already implemented.
 | Method and path | Current behavior |
 | --- | --- |
 | `GET /api/health` | Returns `200` with `{"status":"ok"}`. |
-| `POST /api/auth/register` | Accepts `owner_name`, `business_name`, `email`, and `password`; validates input (`400`); when an `AuthRepository` is installed, atomically creates the Owner and business without a branch (`201`), or returns `409` for a duplicate email. Without a repository it retains `501`. |
-| `POST /api/auth/login` | Accepts `email` and `password`; validates input (`400`); requires installed account, session, and rate-limit adapters. Invalid or inactive credentials return `401`, rate limiting returns `429`, and success sets session and CSRF cookies and reports whether first-branch onboarding is required. Missing adapters retain `501`. |
-| `POST /api/auth/logout` | Requires an installed session manager, valid session, and CSRF cookie/header match; revokes the session and clears both cookies. Missing session management retains `501`; unauthenticated requests return `401`. |
+| `POST /api/auth/register` | Accepts `owner_name`, `business_name`, `email`, and `password`; validates input (`400`); when an `AuthRepository` is installed, atomically creates the Owner and business without a branch (`201`), or returns `409` for a duplicate email. Repository failures return a generic `500`. Without a repository it retains `501`. |
+| `POST /api/auth/login` | Accepts `email` and `password`; validates input (`400`); requires installed account, session, and rate-limit adapters. Invalid or inactive credentials return `401`, rate limiting returns `429`, adapter failures return generic `500`/`503`, and success sets session and CSRF cookies and reports whether first-branch onboarding is required. Missing adapters retain `501`. |
+| `POST /api/auth/logout` | Requires an installed session manager, valid session, and matching CSRF cookie/header; revokes the session and clears both cookies. Persistence failures return a generic `500`. Missing session management retains `501`; unauthenticated requests return `401`, and failed CSRF validation returns `403`. |
 | `GET /api/branches` | Returns `501` pending authentication and database integration. |
 | `POST /api/branches` | Accepts `name`, `address`, `phone`, and `notes`; validates input (`400` on invalid input); otherwise returns `501`. |
 | `GET /api/branches/{branch_id}` | Validates a positive integer ID (`400` if invalid); otherwise returns `501`. |

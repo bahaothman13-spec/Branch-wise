@@ -25,9 +25,9 @@ explicit `501` behavior. No MySQL persistence adapter is implemented here.
 
 - A session token is generated with `secrets.token_urlsafe(32)`. The browser
   receives the opaque token; the server store is keyed by its SHA-256 digest.
-- A session record contains only `user_id`, `auth_version`, `expires_at`, and a
-  digest of a separate CSRF token. It contains no password, role, permissions,
-  business ID, branch ID, or raw token.
+- A session record contains only `user_id`, `access_version_at_login`,
+  `expires_at`, and a digest of a separate CSRF token. It contains no password,
+  role, permissions, business ID, branch ID, or raw token.
 - The default lifetime is fixed at 12 hours, with a seven-day maximum. Sessions
   do not slide or renew automatically. An expired session is deleted during
   validation.
@@ -41,10 +41,13 @@ explicit `501` behavior. No MySQL persistence adapter is implemented here.
   branchless Owner in one transaction, enforce email uniqueness under
   concurrency, and return trusted principal and business-scoped branch-count
   data for login.
-- Login orchestration uses the repository's stored hash and `access_version`,
-  the existing `SessionManager`, and `onboarding_rules.py`. Successful login
-  sets the existing secure session/CSRF cookies and reports when an Owner must
-  create the first branch. Registration never creates a session or branch.
+- Login orchestration uses the repository's stored hash and approved
+  `users.access_version`, the existing `SessionManager`, and
+  `onboarding_rules.py`. A new session copies that value into
+  `access_version_at_login`, matching the approved
+  `auth_sessions.access_version_at_login` contract. Successful login sets the
+  existing session/CSRF cookies and reports when an Owner must create the
+  first branch. Registration never creates a session or branch.
 - Logout is connected when a session manager is installed. It requires the
   existing session and CSRF checks, revokes the server-side record, and clears
   both cookies. A missing manager preserves the existing `501` response.
@@ -91,14 +94,18 @@ the session-bound mechanism above; BE-51 does not introduce another one.
 
 1. Approve the persistent `SessionStore` backend and its operational properties
    (atomic create/replace/delete, expiry cleanup, backup/retention, and access
-   control). This change creates no database tables and chooses no storage
-   product.
-2. Add a monotonic per-user `access_version` (or equivalent credential
-   version) to the approved user schema. The auth repository maps it to the
-   session layer's `auth_version`. Increment it in the same transaction as
-   password changes/resets and account disable/delete changes. Incrementing it
-   after reactivation prevents an old pre-disable session from becoming valid
-   again. A version mismatch lazily invalidates every session for that user.
+   control). The in-memory session record also stores a CSRF-token digest;
+   the reference `auth_sessions` definition does not include that field, so
+   its persistent storage mapping still needs approval. This change creates no
+   database tables and chooses no storage product.
+2. Keep the approved version mapping: read `users.access_version` into
+   `AuthAccount.access_version` and store its login-time value as
+   `SessionRecord.access_version_at_login`, mapped to
+   `auth_sessions.access_version_at_login`. Increment `users.access_version`
+   in the same transaction as role, branch, password, or status changes, as
+   the database contract requires. A mismatch lazily invalidates and deletes
+   the session. This is an adapter mapping only; it does not require a schema
+   change.
 3. Implement the user loader so it fetches the account on each validation,
    checks active/deleted state and the current `access_version` against the
    session's saved version, then constructs the
@@ -117,10 +124,10 @@ the session-bound mechanism above; BE-51 does not introduce another one.
 6. Logout orchestration is connected as a CSRF-protected state-changing
    request: it revokes the presented server-side token and clears both cookies
    when session persistence is installed.
-7. Integrate password change and user status changes with `access_version`
-   increments, and explicitly decide whether role or branch reassignment should
-   also force reauthentication. Fresh user loading already applies current
-   permissions on the next request.
+7. Integrate role, branch, password, and status changes with the approved
+   `access_version` increment and audit transaction. Fresh user loading applies
+   current permissions on the next request; the version increment also forces
+   old sessions to reauthenticate, as specified by the database contract.
 8. Configure production deployment so TLS is terminated safely and the cookie
    helper receives `production=True`; choose the deployment's approved CSRF
    token delivery to same-origin browser code before activating state-changing

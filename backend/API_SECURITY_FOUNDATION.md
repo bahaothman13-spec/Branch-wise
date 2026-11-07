@@ -22,8 +22,9 @@ from controls that still require real authentication and infrastructure.
   protocol. The default rule is 5 attempts per identifier and 30 per client
   address per 15 minutes. There is no production in-memory fallback.
 - Existing password hashing, principal/RBAC and business isolation rules,
-  session foundation, cookie helpers, and session-bound CSRF validation are
-  reused. BE-51 does not implement a second password or CSRF mechanism.
+  session management, cookie helpers, and session-bound CSRF validation are
+  reused by the prepared authentication workflows. Flask test-client tests
+  exercise these workflows with test-local repositories and stores.
 - The API does not enable CORS. There is no wildcard origin and no credentialed
   cross-origin access.
 
@@ -63,9 +64,12 @@ HSTS must be configured at the TLS-terminating ingress once HTTPS is assured.
 - Logout uses the existing session and CSRF checks to revoke the session and
   clear cookies when a session manager is installed; without it, the route
   retains `501`.
-- Current business routes are not decorated with authentication or
-  authorization. The existing RBAC and isolation rules remain reusable policy
-  code, not active route protection.
+- Current branch and user business routes are not decorated with authentication
+  or authorization and continue returning `501` for valid requests. RBAC and
+  business/branch isolation remain reusable policy code. Test-only Flask routes
+  verify that policy is applied to the principal loaded from a session and to
+  resource scopes returned by an injected fake repository; they do not activate
+  or persist business routes.
 - No MySQL connection, schema, or database-backed rate/session store was added.
 - CSRF checks from `session_auth.py` protect logout when sessions are installed.
   Other business routes do not have authenticated sessions.
