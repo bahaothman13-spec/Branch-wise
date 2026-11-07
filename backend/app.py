@@ -7,6 +7,7 @@ from routes.health import health_bp
 from routes.users import users_bp
 from response_helpers import error_response
 from rate_limiting import LoginRateLimitConfig
+from db import db, get_database_uri, migrate
 
 
 DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024
@@ -58,6 +59,11 @@ def _validate_security_config(config):
 def create_app(config=None):
     """Create the Flask application and register its API routes."""
     app = BranchWiseFlask(__name__)
+    database_uri = (
+        config["SQLALCHEMY_DATABASE_URI"]
+        if config is not None and "SQLALCHEMY_DATABASE_URI" in config
+        else get_database_uri()
+    )
     app.config.from_mapping(
         MAX_CONTENT_LENGTH=DEFAULT_MAX_CONTENT_LENGTH,
         APP_ENV="development",
@@ -65,10 +71,16 @@ def create_app(config=None):
         LOGIN_RATE_LIMIT_IDENTIFIER_LIMIT=5,
         LOGIN_RATE_LIMIT_CLIENT_LIMIT=30,
         LOGIN_RATE_LIMIT_WINDOW_SECONDS=15 * 60,
+        SQLALCHEMY_DATABASE_URI=database_uri,
+        SQLALCHEMY_TRACK_MODIFICATIONS=False,
+        SQLALCHEMY_ENGINE_OPTIONS={"pool_pre_ping": True},
     )
     if config is not None:
         app.config.update(config)
     _validate_security_config(app.config)
+
+    db.init_app(app)
+    migrate.init_app(app, db)
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
