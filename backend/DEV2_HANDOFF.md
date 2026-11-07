@@ -157,7 +157,36 @@ The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG
 **Phase 2:** extended `_csv_cell()` to accept only **finite `Decimal`** values, serialized with `str(value)`; e.g. `Decimal("12.5000")` exports exactly as `12.5000`, without float conversion or arithmetic. Tests now cover precision, negative zero, exponent form, invalid `NaN`/infinities, input immutability and Decimal-context behavior. Prior tests rejecting Decimal were updated appropriately; other unsupported types remain rejected. **Recorded export tests:** 59 at Phase 1, **69 after Phase 2**. **Recorded Phase 2 commit:** `c46305f`.
 
 **Remaining:** approved report columns/filter semantics, authenticated export endpoints, real report integration, access checking, optional additional export formats and relevant integration tests. **BE-50 is PARTIAL.**
+### BE-28 Phase 2 — Provisional Supplier API
 
+Added `backend/supplier_routes.py` with an isolated Flask Blueprint
+for `POST /api/suppliers`.
+
+The endpoint:
+- Validates JSON request bodies.
+- Uses the existing `validate_supplier_input()` helper.
+- Rejects unknown fields, including client-supplied `business_id`.
+- Returns HTTP 400 for invalid input.
+- Returns HTTP 501 for valid input because authentication and
+  database persistence are not yet integrated.
+
+Added `backend/tests/test_supplier_routes.py` containing 7 passing
+API tests.
+
+The Blueprint is NOT registered in the main `backend/app.py`.
+There is no actual supplier creation, database write, authentication,
+or authorization in this provisional implementation.
+
+Do not activate the endpoint for real supplier creation until
+authentication, tenant authorization, approved database schema,
+repository implementation, and integration tests are available.
+
+Commit: `f8221e4`
+Branch: `backend-dev2`
+GitHub push: Successful
+Latest full backend test suite: 1,566 passed, 0 failed.
+
+BE-28 remains PARTIAL.
 ## 5. Deferred transfer tasks (BE-34–BE-37)
 
 There is **no new Dev2 transfer implementation**. A read-only review examined the cached `origin/backend-dev1` version of `backend/transfer_rules.py` and its tests. That module contains pure branch/item validation, dispatch/receipt quantity and discrepancy calculations, and lifecycle transition checks; duplicating it on Dev2 would create unnecessary ownership conflicts.
