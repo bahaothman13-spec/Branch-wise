@@ -2,9 +2,9 @@
 
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
-**Documentation snapshot:** 2026-11-07
-**Last reported commit:** `c46305f` (BE-50 Phase 2)
-**Last user-confirmed full-suite run:** **1,559 passed, 0 failed**
+**Documentation snapshot:** 2026-11-08
+**Last reported commit:** `c6e7764` (BE-29 Phase 2; successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,650 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -18,7 +18,7 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | Task | Work completed / phases | Production module | Test module | Status |
 | --- | --- | --- | --- | --- |
 | **BE-28** Supplier Management APIs | Phase 1: supplier input validation | [`supplier_validation.py`](supplier_validation.py) | [`test_supplier_validation.py`](tests/test_supplier_validation.py) | PARTIAL |
-| **BE-29** Purchase Order APIs | Phase 1: purchase-order input validation | [`purchase_order_validation.py`](purchase_order_validation.py) | [`test_purchase_order_validation.py`](tests/test_purchase_order_validation.py) | PARTIAL |
+| **BE-29** Purchase Order APIs | Phase 1: purchase-order input validation; Phase 2: provisional Purchase Order API | [`purchase_order_validation.py`](purchase_order_validation.py), [`purchase_order_routes.py`](purchase_order_routes.py) | [`test_purchase_order_validation.py`](tests/test_purchase_order_validation.py), [`test_purchase_order_routes.py`](tests/test_purchase_order_routes.py) | PARTIAL |
 | **BE-30** Purchase Receiving | Phase 1: receiving-input validation | [`purchase_receiving_validation.py`](purchase_receiving_validation.py) | [`test_purchase_receiving_validation.py`](tests/test_purchase_receiving_validation.py) | PARTIAL |
 | **BE-31** Purchase History & Supplier Records APIs | Phase 1: supplier-filterable purchase-history preparation | [`purchase_history.py`](purchase_history.py) | [`test_purchase_history.py`](tests/test_purchase_history.py) | PARTIAL |
 | **BE-34** Stock Transfer Request APIs | Requirements / compatibility review only; no Dev2 code | — | — | DEFERRED |
@@ -60,6 +60,22 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 - **Creating a PO must not change inventory.** This validator does not create orders, reserve stock, authenticate or persist.
 - **Recorded tests:** 41 (after Decimal-context regression fix).
 - **Remaining:** approved PO API/schema/line contract, creation/updates, uniqueness, authorized business/branch/supplier loading, database transactions and integration tests.
+
+### BE-29 Phase 2 — Provisional Purchase Order API
+
+Added `backend/purchase_order_routes.py` with isolated Flask Blueprint `purchase_order_bp` for `POST /api/purchase-orders`, reusing the existing `validate_purchase_order_input()` helper unchanged.
+
+- Returns HTTP 400 for invalid JSON/body shapes, validator errors, and unknown fields at both order and item levels.
+- Preserves existing field-error messages, exact cost validation without normalization/conversion, and product-only, variant-only, and both-reference behavior.
+- Valid requests return HTTP 501 because authentication, authorization, and database persistence are not integrated, with the message: `Purchase order creation is pending authentication, authorization, and database integration.`
+
+The Blueprint is **not registered** in the main Flask application (`backend/app.py`). It performs no database access, ID generation, order creation, or inventory changes. Caller-supplied IDs and metadata do not authorize access; real integration still requires Developer 1's trusted authentication/RBAC, business/branch/resource ownership checks, approved schema/repository contracts, and integration tests.
+
+Added `backend/tests/test_purchase_order_routes.py` containing **84 passing isolated Flask API tests**, including raw nonfinite/overflowed JSON cost literals and exact validator-message assertions. No MySQL, external services, or real authentication are required by these tests.
+
+**Commit:** `c6e7764` on `backend-dev2`; **GitHub push:** successful. **Latest full backend suite:** **1,650 passed, 0 failed**.
+
+**BE-29 remains PARTIAL.**
 
 ### BE-30 — Purchase Receiving, Phase 1
 
@@ -184,7 +200,7 @@ repository implementation, and integration tests are available.
 Commit: `f8221e4`
 Branch: `backend-dev2`
 GitHub push: Successful
-Latest full backend test suite: 1,566 passed, 0 failed.
+Historical full backend test suite after BE-28 Phase 2: 1,566 passed, 0 failed.
 
 BE-28 remains PARTIAL.
 ## 5. Deferred transfer tasks (BE-34–BE-37)
@@ -206,7 +222,7 @@ BE-34 request APIs, BE-35 approval/dispatch, BE-36 receiving/discrepancies and B
 - **Inventory:** reads/changes need authoritative availability and an append-only movement ledger. Receiving, dispatch, cancellation and duplicate detection must be coordinated in **durable atomic transactions**, not by pure helpers or in-memory flags.
 - **Dates and reporting:** align timezone, eligibility, source completeness, report definitions, snapshot cutoff, and unique source identities before cross-branch/historical comparisons. Missing records are not implicit zeros.
 - **AI:** use trusted scoped inputs, safe error messages, no secrets in logs/output; verify model/provider access before enabling live calls. Tests with mocks do not prove live service availability.
-- **Testing:** keep unit tests plus later HTTP, DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later suites are not yet covered by the last reported 1,559 local tests.
+- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,650 local tests.
 
 ## 7. AI environment and dependency notes
 
@@ -242,7 +258,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The reported latest full suite: **1,559 passed in 4.42 seconds** on the user's local machine after BE-50 Phase 2. This is a historical result; rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-29 Phase 2: **1,650 passed, 0 failed**. **Historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ## 9. Collaboration and next steps
 
