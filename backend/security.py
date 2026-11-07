@@ -4,8 +4,8 @@ from werkzeug.security import check_password_hash, generate_password_hash
 
 
 def hash_password(password: str) -> str:
-    """Return a secure hash of a plain-text password."""
-    return generate_password_hash(password)
+    """Return an explicit Werkzeug scrypt hash of a plain-text password."""
+    return generate_password_hash(password, method="scrypt")
 
 
 def verify_password(password: str, password_hash: str) -> bool:

@@ -128,7 +128,7 @@ def test_simple_product_supports_one_default_variant_without_size_or_color():
         ("selling_price", -1),
         ("selling_price", "NaN"),
         ("selling_price", "Infinity"),
-        ("selling_price", "1000000000"),
+        ("selling_price", "100000000000"),
         ("selling_price", "1.2341"),
         ("selling_price", 0.1),
         ("cost_price", True),

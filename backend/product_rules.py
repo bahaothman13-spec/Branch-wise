@@ -29,7 +29,7 @@ from request_validation import is_positive_integer
 PRODUCT_NAME_MAX_LENGTH = 180
 PRODUCT_CODE_MAX_LENGTH = 80
 _MONEY_QUANTUM = Decimal("0.001")
-_MONEY_MAX = Decimal("999999999.999")
+_MONEY_MAX = Decimal("99999999999.999")
 _DEFAULT_COST_PRICE = Decimal("0")
 _DECIMAL_TEXT = re.compile(
     r"^[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][+-]?[0-9]+)?$"
@@ -99,7 +99,7 @@ _CATALOG_RESOURCE_TYPES = frozenset({"product", "variant"})
 
 
 def _normalize_money(value, field_name):
-    """Return exact DECIMAL(12,3)-compatible money; binary floats are rejected."""
+    """Return exact DECIMAL(14,3)-compatible money; binary floats are rejected."""
     if isinstance(value, bool) or isinstance(value, float):
         raise ValueError(f"{field_name} must be an exact decimal value.")
 
@@ -123,12 +123,12 @@ def _normalize_money(value, field_name):
     if amount < 0:
         raise ValueError(f"{field_name} must be non-negative.")
     if amount > _MONEY_MAX:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).")
+        raise ValueError(f"{field_name} must fit DECIMAL(14,3).")
 
     try:
         normalized = amount.quantize(_MONEY_QUANTUM)
     except InvalidOperation:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).") from None
+        raise ValueError(f"{field_name} must fit DECIMAL(14,3).") from None
     if normalized != amount:
         raise ValueError(f"{field_name} may have at most 3 decimal places.")
     return normalized

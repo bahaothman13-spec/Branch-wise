@@ -270,6 +270,27 @@ def test_history_uses_the_unit_price_snapshot_stored_on_each_line():
     assert detail.total_amount == Decimal("2.470")
 
 
+def test_history_accepts_backend_d05_unit_price_and_total_precision():
+    amount = Decimal("9999999999999.900")
+    historical = sale(
+        52,
+        items=(
+            line(
+                quantity=100,
+                unit_price=Decimal("99999999999.999"),
+                subtotal=amount,
+            ),
+        ),
+        total=amount,
+    )
+
+    detail = get_sale_details(principal(), [historical], sale_reference="SALE-0052")
+
+    assert detail.items[0].unit_price_snapshot == Decimal("99999999999.999")
+    assert detail.items[0].line_subtotal == amount
+    assert detail.total_amount == amount
+
+
 def test_sale_details_include_full_authorized_transaction_snapshot():
     detail = get_sale_details(principal(), [sale(60)], sale_id="60")
 
@@ -352,7 +373,7 @@ def test_detail_lookup_requires_exactly_one_valid_selector():
         ({"responsible_user_id": False}, "responsible_user_id"),
         ({"status": "Refunded"}, "invalid status"),
         ({"total_amount": Decimal("2.469")}, "total does not match"),
-        ({"total_amount": Decimal("1000000000.000")}, "DECIMAL\\(12,3\\)"),
+        ({"total_amount": Decimal("10000000000000.000")}, "DECIMAL\\(16,3\\)"),
     ],
 )
 def test_malformed_trusted_sale_records_are_rejected(changes, message):
@@ -367,9 +388,10 @@ def test_malformed_trusted_sale_records_are_rejected(changes, message):
     [
         line(subtotal=Decimal("2.469")),
         line(unit_price=Decimal("1.2345")),
+        line(unit_price=Decimal("100000000000.000")),
         line(quantity=True),
         line(product_name=" "),
-        line(subtotal=Decimal("1000000000.000")),
+        line(subtotal=Decimal("10000000000000.000")),
     ],
 )
 def test_malformed_trusted_sale_lines_are_rejected(bad_line):

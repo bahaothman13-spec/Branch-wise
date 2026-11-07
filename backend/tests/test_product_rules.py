@@ -137,7 +137,7 @@ def test_product_creation_requires_a_trusted_active_category():
         ("selling_price", -1),
         ("selling_price", "NaN"),
         ("selling_price", "Infinity"),
-        ("selling_price", "1000000000"),
+        ("selling_price", "100000000000"),
         ("selling_price", "1.2341"),
         ("selling_price", "1_000"),
         ("selling_price", 0.1),
@@ -147,15 +147,15 @@ def test_product_creation_requires_a_trusted_active_category():
         ("cost_price", 0.1),
     ],
 )
-def test_prices_must_be_nonnegative_exact_decimal_12_3(field, value):
+def test_prices_must_be_nonnegative_exact_decimal_14_3(field, value):
     with pytest.raises(ValueError):
         product_data(**{field: value})
 
 
 def test_exact_decimal_values_are_normalized_without_float_rounding():
-    data = product_data(selling_price=Decimal("999999999.999"), cost_price="1.2300")
+    data = product_data(selling_price=Decimal("99999999999.999"), cost_price="1.2300")
 
-    assert data.selling_price == Decimal("999999999.999")
+    assert data.selling_price == Decimal("99999999999.999")
     assert data.cost_price == Decimal("1.230")
 
 

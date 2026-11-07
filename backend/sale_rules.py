@@ -29,7 +29,7 @@ from stock_rules import (
 )
 
 
-_MONEY_MAX_MILLIUNITS = 999_999_999_999
+_MONEY_MAX_MILLIUNITS = 9_999_999_999_999_999
 
 
 @dataclass(frozen=True)
@@ -163,7 +163,7 @@ def _from_milliunits(amount):
 
 def _checked_amount(milliunits, field_name):
     if milliunits < 0 or milliunits > _MONEY_MAX_MILLIUNITS:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).")
+        raise ValueError(f"{field_name} must fit DECIMAL(16,3).")
     return _from_milliunits(milliunits)
 
 

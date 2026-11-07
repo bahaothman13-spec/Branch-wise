@@ -196,6 +196,18 @@ def test_subtotals_and_total_preserve_three_decimal_precision():
     assert proposal.total_amount == Decimal("0.377")
 
 
+def test_sale_uses_backend_d05_unit_price_and_total_precision():
+    proposal = prepare(
+        [{"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 100}],
+        products={PRODUCT_ID: product(selling_price="99999999999.999")},
+        inventory_records={(BRANCH_ID, VARIANT_ID): inventory(available_qty=100)},
+    )
+
+    assert proposal.items[0].unit_price == Decimal("99999999999.999")
+    assert proposal.items[0].subtotal == Decimal("9999999999999.900")
+    assert proposal.total_amount == Decimal("9999999999999.900")
+
+
 def test_duplicate_cart_lines_are_aggregated_before_stock_validation():
     lines = [
         {"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 2},
@@ -274,7 +286,7 @@ def test_malformed_lines_and_invalid_ids_or_quantities_are_rejected(item):
 
 @pytest.mark.parametrize(
     "bad_price",
-    [True, 1.2, -1, "NaN", "Infinity", "1.2345", "1000000000.000", "not-money"],
+    [True, 1.2, -1, "NaN", "Infinity", "1.2345", "100000000000.000", "not-money"],
 )
 def test_invalid_trusted_prices_are_rejected(bad_price):
     with pytest.raises(ValueError):
@@ -282,28 +294,29 @@ def test_invalid_trusted_prices_are_rejected(bad_price):
 
 
 def test_line_subtotal_overflow_is_rejected():
-    with pytest.raises(ValueError, match=r"DECIMAL\(12,3\)"):
+    with pytest.raises(ValueError, match=r"DECIMAL\(16,3\)"):
         prepare(
-            [{"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 2}],
-            products={PRODUCT_ID: product(selling_price="999999999.999")},
+            [{"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 101}],
+            products={PRODUCT_ID: product(selling_price="99999999999.999")},
+            inventory_records={(BRANCH_ID, VARIANT_ID): inventory(available_qty=101)},
         )
 
 
 def test_total_overflow_is_rejected():
-    with pytest.raises(ValueError, match=r"DECIMAL\(12,3\)"):
+    with pytest.raises(ValueError, match=r"DECIMAL\(16,3\)"):
         prepare(
             [
-                {"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 1},
-                {"product_id": 51, "product_variant_id": 102, "quantity": 1},
+                {"product_id": PRODUCT_ID, "product_variant_id": VARIANT_ID, "quantity": 51},
+                {"product_id": 51, "product_variant_id": 102, "quantity": 51},
             ],
             products={
-                PRODUCT_ID: product(selling_price="600000000.000"),
-                51: product(51, selling_price="600000000.000"),
+                PRODUCT_ID: product(selling_price="99999999999.999"),
+                51: product(51, selling_price="99999999999.999"),
             },
             variants={VARIANT_ID: variant(), 102: variant(102, product_id=51)},
             inventory_records={
-                (BRANCH_ID, VARIANT_ID): inventory(),
-                (BRANCH_ID, 102): inventory(102),
+                (BRANCH_ID, VARIANT_ID): inventory(available_qty=51),
+                (BRANCH_ID, 102): inventory(102, available_qty=51),
             },
         )
 

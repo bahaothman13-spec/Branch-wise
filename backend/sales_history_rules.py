@@ -28,7 +28,9 @@ from request_validation import is_positive_integer
 from sale_cancellation_rules import SaleStatus
 
 
-_MAX_MONEY = Decimal("999999999.999")
+_MAX_UNIT_PRICE = Decimal("99999999999.999")
+_MAX_SALE_AMOUNT = Decimal("9999999999999.999")
+_MAX_SALE_AMOUNT_MILLIUNITS = 9_999_999_999_999_999
 _MILLIUNIT = Decimal("0.001")
 _MAX_PER_PAGE = 100
 _PAGE_DIGITS = re.compile(r"^[0-9]+$")
@@ -170,17 +172,17 @@ def _validate_name(value, field_name):
         raise ValueError(f"{field_name} must be a non-empty string.")
 
 
-def _validate_money(value, field_name):
+def _validate_money(value, field_name, *, max_value, decimal_type):
     if type(value) is not Decimal or not value.is_finite():
         raise ValueError(f"{field_name} must be a finite Decimal amount.")
-    if value < 0 or value > _MAX_MONEY:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).")
+    if value < 0 or value > max_value:
+        raise ValueError(f"{field_name} must fit {decimal_type}.")
     try:
         normalized = value.quantize(_MILLIUNIT)
     except InvalidOperation:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).") from None
+        raise ValueError(f"{field_name} must fit {decimal_type}.") from None
     if value != normalized:
-        raise ValueError(f"{field_name} must fit DECIMAL(12,3).")
+        raise ValueError(f"{field_name} must fit {decimal_type}.")
     return int(value * 1000)
 
 
@@ -197,12 +199,20 @@ def _validate_line(line):
         raise ValueError("quantity must be a positive integer.")
 
     price_milliunits = _validate_money(
-        line.unit_price_snapshot, "unit_price_snapshot"
+        line.unit_price_snapshot,
+        "unit_price_snapshot",
+        max_value=_MAX_UNIT_PRICE,
+        decimal_type="DECIMAL(14,3)",
     )
-    subtotal_milliunits = _validate_money(line.line_subtotal, "line_subtotal")
+    subtotal_milliunits = _validate_money(
+        line.line_subtotal,
+        "line_subtotal",
+        max_value=_MAX_SALE_AMOUNT,
+        decimal_type="DECIMAL(16,3)",
+    )
     expected_subtotal = price_milliunits * line.quantity
-    if expected_subtotal > 999_999_999_999:
-        raise ValueError("Sale line subtotal must fit DECIMAL(12,3).")
+    if expected_subtotal > _MAX_SALE_AMOUNT_MILLIUNITS:
+        raise ValueError("Sale line subtotal must fit DECIMAL(16,3).")
     if subtotal_milliunits != expected_subtotal:
         raise ValueError("The sale line subtotal does not match its price snapshot.")
     return subtotal_milliunits
@@ -245,9 +255,14 @@ def _validate_sale_record(sale):
         raise ValueError("A trusted sale must contain at least one item.")
 
     total_milliunits = sum(_validate_line(line) for line in sale.items)
-    if total_milliunits > 999_999_999_999:
-        raise ValueError("Sale total must fit DECIMAL(12,3).")
-    stored_total = _validate_money(sale.total_amount, "total_amount")
+    if total_milliunits > _MAX_SALE_AMOUNT_MILLIUNITS:
+        raise ValueError("Sale total must fit DECIMAL(16,3).")
+    stored_total = _validate_money(
+        sale.total_amount,
+        "total_amount",
+        max_value=_MAX_SALE_AMOUNT,
+        decimal_type="DECIMAL(16,3)",
+    )
     if total_milliunits != stored_total:
         raise ValueError("The sale total does not match its historical line amounts.")
     return SaleHistoryRecord(
