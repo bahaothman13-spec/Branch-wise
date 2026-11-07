@@ -67,8 +67,9 @@ class SessionRecord:
 class SessionStore(Protocol):
     """Minimal interface for an approved persistent server-side session store.
 
-    A production implementation must declare ``is_persistent = True`` so the
-    installer can reject test-local or in-memory stores in production.
+    A production implementation must declare ``is_persistent = True`` and
+    ``is_shared = True`` so the installer can reject test-local, in-memory, or
+    worker-local stores in production.
     """
 
     def get(self, token_digest: str) -> SessionRecord | None:
@@ -293,11 +294,13 @@ def install_session_auth(
     ``create_app`` intentionally does not call this until a persistent store
     and authoritative database user loader have been approved and integrated.
     """
-    if (
-        app.config.get("APP_ENV") == "production"
-        and getattr(store, "is_persistent", False) is not True
+    if app.config.get("APP_ENV") == "production" and any(
+        getattr(store, attribute, False) is not True
+        for attribute in ("is_persistent", "is_shared")
     ):
-        raise ValueError("Production sessions require persistent storage.")
+        raise ValueError(
+            "Production sessions require persistent storage shared across workers."
+        )
 
     manager = SessionManager(
         store,

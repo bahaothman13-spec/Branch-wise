@@ -5,6 +5,11 @@ import pytest
 from app import create_app
 
 
+PRODUCTION_DATABASE_URI = (
+    "mysql+mysqlconnector://test_user:test_password@db.example.test/branchwise"
+)
+
+
 @pytest.mark.parametrize(
     ("path", "content_type"),
     [
@@ -33,9 +38,11 @@ def test_security_headers_are_attached_to_success_and_error_responses():
         "X-Frame-Options": "DENY",
         "Referrer-Policy": "no-referrer",
         "Content-Security-Policy": (
-            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'"
+            "default-src 'none'; object-src 'none'; form-action 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'"
         ),
         "Permissions-Policy": "camera=(), microphone=(), geolocation=()",
+        "Cache-Control": "no-store",
     }
 
     for response in (client.get("/api/health"), client.get("/api/unknown")):
@@ -108,6 +115,20 @@ def test_unexpected_secrets_and_stack_trace_are_not_returned_or_logged(caplog):
         {"SESSION_COOKIE_SECURE": "true"},
         {"APP_ENV": "production", "SESSION_COOKIE_SECURE": False},
         {"APP_ENV": "production", "SESSION_COOKIE_SECURE": True, "DEBUG": True},
+        {
+            "APP_ENV": "production",
+            "SESSION_COOKIE_SECURE": True,
+            "DEBUG": False,
+            "SECRET_KEY": "short",
+            "SQLALCHEMY_DATABASE_URI": PRODUCTION_DATABASE_URI,
+        },
+        {
+            "APP_ENV": "production",
+            "SESSION_COOKIE_SECURE": True,
+            "DEBUG": False,
+            "SECRET_KEY": None,
+            "SQLALCHEMY_DATABASE_URI": PRODUCTION_DATABASE_URI,
+        },
         {"DEBUG": "false"},
     ],
 )
@@ -118,10 +139,98 @@ def test_invalid_security_configuration_is_rejected(config):
 
 def test_valid_production_security_configuration_is_accepted():
     app = create_app(
-        {"APP_ENV": "production", "SESSION_COOKIE_SECURE": True, "DEBUG": False}
+        {
+            "APP_ENV": "production",
+            "SESSION_COOKIE_SECURE": True,
+            "DEBUG": False,
+            "SECRET_KEY": "k" * 32,
+            "SQLALCHEMY_DATABASE_URI": PRODUCTION_DATABASE_URI,
+        }
     )
 
     assert app.config["SESSION_COOKIE_SECURE"] is True
+
+
+def test_production_configuration_is_loaded_from_environment(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    monkeypatch.setenv("FLASK_DEBUG", "false")
+    monkeypatch.setenv("SECRET_KEY", "production-secret-key-" + "k" * 32)
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URI)
+
+    app = create_app()
+
+    assert app.config["APP_ENV"] == "production"
+    assert app.config["SESSION_COOKIE_SECURE"] is True
+    assert app.config["DEBUG"] is False
+    assert app.config["SECRET_KEY"].startswith("production-secret-key-")
+
+
+def test_production_rejects_in_memory_database_fallback():
+    with pytest.raises(ValueError, match="in-memory SQLite"):
+        create_app(
+            {
+                "APP_ENV": "production",
+                "SESSION_COOKIE_SECURE": True,
+                "DEBUG": False,
+                "SECRET_KEY": "k" * 32,
+                "SQLALCHEMY_DATABASE_URI": "sqlite:///:memory:",
+            }
+        )
+
+
+def test_invalid_boolean_environment_setting_fails_startup(monkeypatch):
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "sometimes")
+
+    with pytest.raises(ValueError, match="SESSION_COOKIE_SECURE"):
+        create_app()
+
+
+def test_password_length_is_bounded_before_authentication_or_registration():
+    client = create_app().test_client()
+    long_password = "p" * 1025
+
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": long_password},
+    )
+    registration = client.post(
+        "/api/auth/register",
+        json={
+            "owner_name": "Owner",
+            "business_name": "Business",
+            "email": "owner@example.com",
+            "password": long_password,
+        },
+    )
+
+    assert login.status_code == registration.status_code == 400
+    assert login.get_json()["errors"]["password"] == (
+        "Password must be no more than 1024 characters long."
+    )
+    assert registration.get_json()["errors"]["password"] == (
+        "Password must be no more than 1024 characters long."
+    )
+
+
+def test_environment_configured_production_without_adapters_denies_login(monkeypatch):
+    monkeypatch.setenv("APP_ENV", "production")
+    monkeypatch.setenv("SESSION_COOKIE_SECURE", "true")
+    monkeypatch.setenv("FLASK_DEBUG", "false")
+    monkeypatch.setenv("SECRET_KEY", "k" * 32)
+    monkeypatch.setenv("DATABASE_URL", PRODUCTION_DATABASE_URI)
+    client = create_app().test_client()
+
+    response = client.post(
+        "/api/auth/login",
+        json={"email": "owner@example.com", "password": "valid-password"},
+    )
+
+    assert response.status_code == 501
+    assert "Set-Cookie" not in response.headers
+    assert response.get_json() == {
+        "message": "Database authentication is not implemented yet."
+    }
 
 
 @pytest.mark.parametrize(

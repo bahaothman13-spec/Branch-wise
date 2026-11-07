@@ -29,6 +29,18 @@ from session_auth import (
 auth_bp = Blueprint("auth", __name__, url_prefix="/api/auth")
 
 MIN_PASSWORD_LENGTH = 8
+MAX_PASSWORD_LENGTH = 1024
+
+
+def _password_length_errors(errors, password):
+    """Bound password work while retaining the existing field-error shape."""
+    password_error = password_length_error(password, MIN_PASSWORD_LENGTH)
+    if password_error:
+        errors["password"] = password_error
+    elif isinstance(password, str) and len(password) > MAX_PASSWORD_LENGTH:
+        errors["password"] = (
+            f"Password must be no more than {MAX_PASSWORD_LENGTH} characters long."
+        )
 
 
 @auth_bp.post("/register")
@@ -52,9 +64,7 @@ def register():
         errors["email"] = "Enter a valid email address."
 
     password = data.get("password")
-    password_error = password_length_error(password, MIN_PASSWORD_LENGTH)
-    if password_error:
-        errors["password"] = password_error
+    _password_length_errors(errors, password)
 
     if errors:
         return error_response(errors=errors, status_code=400)
@@ -110,6 +120,8 @@ def login():
         field_error = required_string_error(data, field)
         if field_error:
             errors[field] = field_error
+
+    _password_length_errors(errors, data.get("password"))
 
     email = data.get("email")
     if isinstance(email, str) and email.strip() and not is_valid_email(email):

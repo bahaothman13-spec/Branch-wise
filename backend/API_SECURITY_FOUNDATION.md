@@ -9,7 +9,8 @@ from controls that still require real authentication and infrastructure.
   configured up to 16 MiB; oversized requests receive a generic JSON `413`.
 - All responses receive conservative browser headers: content-type sniffing is
   disabled, framing is denied, referrers are suppressed, browser capabilities
-  are restricted, and the API content policy disables active content.
+  are restricted, the API content policy disables active content, and API
+  responses are marked `Cache-Control: no-store`.
 - HTTP and unexpected application errors use generic JSON. Unexpected request
   exceptions are not written to application logs with exception text or
   traceback. Existing database connection logging also avoids exception text
@@ -27,6 +28,8 @@ from controls that still require real authentication and infrastructure.
   exercise these workflows with test-local repositories and stores.
 - The API does not enable CORS. There is no wildcard origin and no credentialed
   cross-origin access.
+- Passwords are limited to 1,024 characters before hashing or authentication,
+  so a request cannot force unbounded password-hash work.
 
 ## Configuration and deployment
 
@@ -37,10 +40,20 @@ The app factory accepts Flask configuration and validates these settings:
 | `MAX_CONTENT_LENGTH` | 1 MiB | Positive integer, no greater than 16 MiB |
 | `APP_ENV` | `development` | `production` |
 | `SESSION_COOKIE_SECURE` | `False` | `True` |
-| `DEBUG` | Flask default (`False`) | `False` |
+| `FLASK_DEBUG` (environment) / `DEBUG` (app config) | `False` | `False` |
+| `SECRET_KEY` | unset | Random value of at least 32 bytes |
 | `LOGIN_RATE_LIMIT_IDENTIFIER_LIMIT` | `5` | Configure to the approved policy |
 | `LOGIN_RATE_LIMIT_CLIENT_LIMIT` | `30` | Configure to the approved policy |
 | `LOGIN_RATE_LIMIT_WINDOW_SECONDS` | `900` | Configure to the approved policy |
+
+`APP_ENV`, `SESSION_COOKIE_SECURE`, `FLASK_DEBUG`, and `SECRET_KEY` are read
+from the process environment or backend `.env`; explicit app-factory config
+overrides them. `FLASK_DEBUG` maps to the Flask `DEBUG` config value. Invalid
+Boolean values fail app startup. Production startup
+fails when secure cookies, disabled debug mode, or a sufficiently long signing
+secret is missing, or when SQLAlchemy would use the in-memory SQLite fallback.
+Do not start Flask CLI with `--debug` in production. Production must point at a
+durable account database configured for the deployment.
 
 The session cookie helper already sets the authentication cookie `HttpOnly`,
 keeps cookies host-only and scoped to `/api`, and uses `SameSite=Lax`; the CSRF
@@ -59,8 +72,10 @@ HSTS must be configured at the TLS-terminating ingress once HTTPS is assured.
   is no local-memory fallback.
 - `auth_workflows.py` defines the repository contract and uses the existing
   password helpers, `SessionManager`, and onboarding policy. No real account,
-  session, or rate-limit persistence adapter is configured. Production adapter
-  installers require an explicit persistent-store declaration.
+  session, or rate-limit persistence adapter is configured. Production session
+  stores must declare persistence and sharing; rate-limit stores must declare
+  persistent, shared, atomic counters. Missing or unhealthy dependencies fail
+  closed before authentication.
 - Logout uses the existing session and CSRF checks to revoke the session and
   clear cookies when a session manager is installed; without it, the route
   retains `501`.

@@ -53,8 +53,9 @@ explicit `501` behavior. No MySQL persistence adapter is implemented here.
   both cookies. A missing manager preserves the existing `501` response.
 - The route requires the existing `LoginRateLimiter` as well as account and
   session adapters. The limiter fails closed if its shared store errors. In
-  production, adapter installers require an explicit `is_persistent = True`
-  declaration; no in-memory production fallback is provided.
+  production, session stores must declare both `is_persistent = True` and
+  `is_shared = True`; rate-limit stores must declare persistent, shared, atomic
+  counters. No in-memory or worker-local production fallback is provided.
 - There is no production in-memory fallback. `SessionStore` is an interface;
   the only in-memory implementation in this change is local to pytest.
 
@@ -68,7 +69,13 @@ itself. Both cookies set `Secure` when called with `production=True`. No
 `Domain` attribute is added.
 
 BE-51 adds app configuration validation: production requires
-`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
+`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, `DEBUG=False`, and a
+random `SECRET_KEY` with at least 32 bytes. The factory reads these values from
+the process environment or backend `.env`, then applies explicit factory
+configuration as an override. Production startup fails if these safeguards
+are missing. The custom opaque session tokens do not use Flask's signed-cookie
+session mechanism; the application key is still required for any future Flask
+signing features.
 The login route passes the validated secure-cookie setting to the cookie
 helper. Production must serve cookies only over HTTPS. The deployment's TLS
 terminator must enforce HTTPS; HSTS is left to that terminator because this app

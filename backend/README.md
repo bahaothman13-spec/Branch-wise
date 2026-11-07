@@ -10,7 +10,7 @@ python -m venv .venv
 python -m pip install -r requirements.txt
 ```
 
-Copy `.env.example` to `.env` and set `SECRET_KEY` plus the database settings for your environment. The `.env` file is ignored by Git.
+Copy `.env.example` to `.env` and set the database settings for your environment. The `.env` file is ignored by Git. Production must also set `APP_ENV=production`, `SESSION_COOKIE_SECURE=True`, `FLASK_DEBUG=False`, and a randomly generated `SECRET_KEY` of at least 32 bytes. Production startup rejects the in-memory SQLite fallback. Keep real secrets outside version control.
 
 ```powershell
 flask --app app run

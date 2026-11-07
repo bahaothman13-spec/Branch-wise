@@ -59,7 +59,8 @@ class RateLimitStore(Protocol):
     The store increments a bucket within a fixed window and returns whether
     the attempt is allowed. A production implementation must share counters
     across all API workers, expire old buckets reliably, and declare
-    ``is_persistent = True`` for installation in production.
+    ``is_persistent = True``, ``is_shared = True``, and ``is_atomic = True`` for
+    installation in production.
     """
 
     def consume(
@@ -95,11 +96,16 @@ class LoginRateLimiter:
         normalized_identifier = self._normalize(identifier, "identifier", 254)
         normalized_client = self._normalize(client_address, "client_address", 255)
 
-        identifier_result = self._consume(
-            "identifier", normalized_identifier, self._config.identifier_limit
-        )
         client_result = self._consume(
             "client", normalized_client, self._config.client_limit
+        )
+        # Once an address is blocked, avoid creating attacker-controlled
+        # identifier buckets for every subsequent request from that client.
+        if not client_result.allowed:
+            return client_result
+
+        identifier_result = self._consume(
+            "identifier", normalized_identifier, self._config.identifier_limit
         )
         allowed = identifier_result.allowed and client_result.allowed
         denied = tuple(
@@ -147,11 +153,13 @@ def install_login_rate_limiter(
     Production stores must be durable and shared across workers. There is no
     local-memory fallback, and the key secret is never read from a default.
     """
-    if (
-        app.config.get("APP_ENV") == "production"
-        and getattr(store, "is_persistent", False) is not True
+    if app.config.get("APP_ENV") == "production" and any(
+        getattr(store, attribute, False) is not True
+        for attribute in ("is_persistent", "is_shared", "is_atomic")
     ):
-        raise ValueError("Production rate limiting requires persistent storage.")
+        raise ValueError(
+            "Production rate limiting requires persistent storage with shared atomic counters."
+        )
     limiter = LoginRateLimiter(store, key_secret, config)
     app.extensions[LOGIN_RATE_LIMIT_EXTENSION] = limiter
     return limiter

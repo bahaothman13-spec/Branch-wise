@@ -515,7 +515,8 @@ def test_login_rate_limit_denial_returns_429_without_authenticating():
         "error": "Too many login attempts. Try again later."
     }
     assert store.records == {}
-    assert len(limiter_store.calls) == 2
+    # The address bucket is checked first and short-circuits identifier work.
+    assert len(limiter_store.calls) == 1
 
 
 def test_login_rate_limit_store_failure_fails_closed():
@@ -642,6 +643,8 @@ def test_production_rejects_repositories_and_session_stores_without_persistence_
             "APP_ENV": "production",
             "SESSION_COOKIE_SECURE": True,
             "DEBUG": False,
+            "SECRET_KEY": "k" * 32,
+            "SQLALCHEMY_DATABASE_URI": "mysql+mysqlconnector://test:test@db.test/branchwise",
         }
     )
     with pytest.raises(ValueError, match="persistent storage"):
@@ -666,6 +669,8 @@ def test_production_without_persistent_auth_adapters_keeps_auth_routes_at_501():
             "APP_ENV": "production",
             "SESSION_COOKIE_SECURE": True,
             "DEBUG": False,
+            "SECRET_KEY": "k" * 32,
+            "SQLALCHEMY_DATABASE_URI": "mysql+mysqlconnector://test:test@db.test/branchwise",
             "TESTING": True,
         }
     )

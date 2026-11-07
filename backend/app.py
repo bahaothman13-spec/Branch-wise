@@ -1,4 +1,8 @@
+import os
+
+from dotenv import load_dotenv
 from flask import Flask, request
+from sqlalchemy.engine import make_url
 from werkzeug.exceptions import HTTPException
 
 from routes.auth import auth_bp
@@ -7,11 +11,37 @@ from routes.health import health_bp
 from routes.users import users_bp
 from response_helpers import error_response
 from rate_limiting import LoginRateLimitConfig
-from db import db, get_database_uri, migrate
+from db import ENV_FILE, db, get_database_uri, migrate
 
 
 DEFAULT_MAX_CONTENT_LENGTH = 1024 * 1024
 MAX_CONFIGURABLE_CONTENT_LENGTH = 16 * 1024 * 1024
+
+
+def _environment_boolean(name, default=False):
+    """Parse a deployment Boolean explicitly instead of treating typos as false."""
+    value = os.environ.get(name)
+    if value is None:
+        return default
+    normalized = value.strip().casefold()
+    if normalized in {"1", "true", "yes", "on"}:
+        return True
+    if normalized in {"0", "false", "no", "off"}:
+        return False
+    raise ValueError(f"{name} must be a Boolean value.")
+
+
+def _environment_security_defaults():
+    """Load supported deployment settings before constructing the app."""
+    load_dotenv(dotenv_path=ENV_FILE)
+    return {
+        "APP_ENV": os.environ.get("APP_ENV", "development"),
+        "SESSION_COOKIE_SECURE": _environment_boolean(
+            "SESSION_COOKIE_SECURE", default=False
+        ),
+        "DEBUG": _environment_boolean("FLASK_DEBUG", default=False),
+        "SECRET_KEY": os.environ.get("SECRET_KEY") or None,
+    }
 
 
 class BranchWiseFlask(Flask):
@@ -54,10 +84,37 @@ def _validate_security_config(config):
         raise ValueError("SESSION_COOKIE_SECURE must be enabled in production.")
     if app_environment == "production" and config.get("DEBUG"):
         raise ValueError("DEBUG must be disabled in production.")
+    if app_environment == "production":
+        try:
+            database_url = make_url(config["SQLALCHEMY_DATABASE_URI"])
+        except Exception:
+            raise ValueError(
+                "Production requires a valid persistent database configuration."
+            ) from None
+        if database_url.drivername.startswith("sqlite") and (
+            database_url.database in (None, "", ":memory:")
+            or database_url.query.get("mode") == "memory"
+        ):
+            raise ValueError(
+                "Production cannot use an in-memory SQLite database."
+            )
+
+        secret_key = config.get("SECRET_KEY")
+        if isinstance(secret_key, str):
+            secret_length = len(secret_key.encode("utf-8"))
+        elif isinstance(secret_key, bytes):
+            secret_length = len(secret_key)
+        else:
+            secret_length = 0
+        if secret_length < 32:
+            raise ValueError(
+                "Production requires a SECRET_KEY containing at least 32 bytes."
+            )
 
 
 def create_app(config=None):
     """Create the Flask application and register its API routes."""
+    environment_defaults = _environment_security_defaults()
     app = BranchWiseFlask(__name__)
     database_uri = (
         config["SQLALCHEMY_DATABASE_URI"]
@@ -66,8 +123,7 @@ def create_app(config=None):
     )
     app.config.from_mapping(
         MAX_CONTENT_LENGTH=DEFAULT_MAX_CONTENT_LENGTH,
-        APP_ENV="development",
-        SESSION_COOKIE_SECURE=False,
+        **environment_defaults,
         LOGIN_RATE_LIMIT_IDENTIFIER_LIMIT=5,
         LOGIN_RATE_LIMIT_CLIENT_LIMIT=30,
         LOGIN_RATE_LIMIT_WINDOW_SECONDS=15 * 60,
@@ -127,11 +183,13 @@ def create_app(config=None):
         response.headers.setdefault("Referrer-Policy", "no-referrer")
         response.headers.setdefault(
             "Content-Security-Policy",
-            "default-src 'none'; frame-ancestors 'none'; base-uri 'none'",
+            "default-src 'none'; object-src 'none'; form-action 'none'; "
+            "frame-ancestors 'none'; base-uri 'none'",
         )
         response.headers.setdefault(
             "Permissions-Policy", "camera=(), microphone=(), geolocation=()"
         )
+        response.headers.setdefault("Cache-Control", "no-store")
         return response
 
     return app

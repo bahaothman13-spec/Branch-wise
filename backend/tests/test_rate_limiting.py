@@ -1,11 +1,13 @@
 """Tests for the injectable login rate-limit foundation."""
 
 import pytest
+from app import create_app
 
 from rate_limiting import (
     LoginRateLimitConfig,
     LoginRateLimiter,
     RateLimitDecision,
+    install_login_rate_limiter,
 )
 
 
@@ -63,6 +65,42 @@ def test_login_rate_limiter_uses_opaque_account_and_client_bucket_keys():
     assert "private@example.com" not in repr(keys)
     assert "203.0.113.8" not in repr(keys)
     assert "s" * 32 not in repr(limiter)
+
+
+def test_blocked_client_does_not_create_further_identifier_buckets():
+    store = FakeRateLimitStore()
+    limiter = LoginRateLimiter(
+        store,
+        b"k" * 32,
+        LoginRateLimitConfig(identifier_limit=5, client_limit=1, window_seconds=60),
+    )
+
+    assert limiter.check("first@example.com", "203.0.113.8").allowed
+    denied = limiter.check("second@example.com", "203.0.113.8")
+
+    assert denied.allowed is False
+    assert len(store.calls) == 3
+
+
+@pytest.mark.parametrize("missing_marker", ["is_shared", "is_atomic"])
+def test_production_limiter_rejects_persistent_but_unsafe_stores(missing_marker):
+    app = create_app(
+        {
+            "APP_ENV": "production",
+            "SESSION_COOKIE_SECURE": True,
+            "DEBUG": False,
+            "SECRET_KEY": "k" * 32,
+            "SQLALCHEMY_DATABASE_URI": "mysql+mysqlconnector://test:test@db.test/branchwise",
+        }
+    )
+    store = FakeRateLimitStore()
+    store.is_persistent = True
+    store.is_shared = True
+    store.is_atomic = True
+    setattr(store, missing_marker, False)
+
+    with pytest.raises(ValueError, match="shared atomic counters"):
+        install_login_rate_limiter(app, store, b"k" * 32)
 
 
 @pytest.mark.parametrize(

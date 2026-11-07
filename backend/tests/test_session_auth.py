@@ -419,6 +419,26 @@ def test_protected_route_requires_explicitly_installed_session_manager():
     assert response.get_json() == {"error": "Authentication is required."}
 
 
+def test_production_rejects_worker_local_persistent_session_store():
+    from app import create_app
+    from session_auth import install_session_auth
+
+    app = create_app(
+        {
+            "APP_ENV": "production",
+            "SESSION_COOKIE_SECURE": True,
+            "DEBUG": False,
+            "SECRET_KEY": "k" * 32,
+            "SQLALCHEMY_DATABASE_URI": "mysql+mysqlconnector://test:test@db.test/branchwise",
+        }
+    )
+    store = MemorySessionStore()
+    store.is_persistent = True
+
+    with pytest.raises(ValueError, match="shared across workers"):
+        install_session_auth(app, store, lambda _user_id: make_user())
+
+
 def test_protected_route_uses_cookie_session_and_ignores_client_identity_fields(
     auth_components,
 ):

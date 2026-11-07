@@ -80,7 +80,14 @@ HSTS is not set by the application; the production TLS-terminating ingress
 must enforce HTTPS and may set HSTS once HTTPS is configured.
 
 The current app factory validates security configuration. Production must set
-`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, and `DEBUG=False`.
+`APP_ENV="production"`, `SESSION_COOKIE_SECURE=True`, `FLASK_DEBUG=False` (or
+`DEBUG=False` in app config), and a random `SECRET_KEY` containing at least 32
+bytes. These settings can be read from the process environment or
+`backend/.env`; explicit factory config takes precedence. The login and
+registration endpoints accept passwords up to 1,024
+characters and return the existing field-level `400` response shape when that
+limit is exceeded. Production startup also rejects the default in-memory
+SQLite database URI; a durable database configuration is required.
 `MAX_CONTENT_LENGTH` defaults to 1 MiB. Login limit defaults are 5 attempts per
 normalized identifier and 30 per client address in 15 minutes, but the prepared
 rules run on `/api/auth/login` only when an atomic, shared `RateLimitStore` and
