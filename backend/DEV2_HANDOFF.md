@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `7301d6b` (BE-41 Phase 2; successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,778 passed, 0 failed**
+**Last reported commit:** `fe80806` (BE-53 Phase 2; successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,790 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -152,7 +152,7 @@ The provisional internal service combines BE-45 date-aware forecast availability
 
 No inventory changes, purchase orders, or database operations occur. The service does not establish that supplied stock is authoritative. Authoritative available stock, matching item/branch identity, compatible quantity units, and an appropriate forecast horizon remain caller/integration responsibilities.
 
-**Commit:** `7301d6b` on `backend-dev2`; **GitHub push:** successful. **Latest full backend suite:** **1,778 passed, 0 failed**.
+**Commit:** `7301d6b` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,778 passed, 0 failed**.
 
 **BE-41 remains PARTIAL.**
 
@@ -180,7 +180,7 @@ The adapter accepts an explicit reporting interval and already-authorized daily 
 
 Complete coverage of supplied observations does **not** prove database source completeness or authorization; trusted retrieval, source eligibility, and access checks remain caller responsibilities.
 
-**Commit:** `3c85724` on `backend-dev2`; **GitHub push:** successful. **Latest full backend suite:** **1,762 passed, 0 failed**.
+**Commit:** `3c85724` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,762 passed, 0 failed**.
 
 **BE-45 remains PARTIAL.**
 
@@ -258,7 +258,7 @@ BE-34 request APIs, BE-35 approval/dispatch, BE-36 receiving/discrepancies and B
 - **Inventory:** reads/changes need authoritative availability and an append-only movement ledger. Receiving, dispatch, cancellation and duplicate detection must be coordinated in **durable atomic transactions**, not by pure helpers or in-memory flags.
 - **Dates and reporting:** align timezone, eligibility, source completeness, report definitions, snapshot cutoff, and unique source identities before cross-branch/historical comparisons. Missing records are not implicit zeros.
 - **AI:** use trusted scoped inputs, safe error messages, no secrets in logs/output; verify model/provider access before enabling live calls. Tests with mocks do not prove live service availability.
-- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,778 local tests.
+- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,790 local tests.
 
 ## 7. AI environment and dependency notes
 
@@ -294,7 +294,13 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-41 Phase 2: **1,778 passed, 0 failed**. **Historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-53 Phase 2: **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+
+### BE-53 Phase 2 — Offline Forecast-to-Replenishment Pipeline Regression Tests
+
+[`test_forecast_replenishment_pipeline.py`](tests/test_forecast_replenishment_pipeline.py) contains **12 passing tests** that exercise the real BE-39 → BE-45 → BE-41 pipeline, including BE-40 forecasting. Coverage includes missing dates, observed zero sales, unavailable forecasts, business/branch/variant isolation, duplicate daily observations, and input immutability.
+
+These are offline tests using synthetic observations and stock inputs, not real MySQL, authentication, or inventory integration tests. **Commit:** `fe80806` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,790 passed, 0 failed**. Relevant implementation tasks remain PARTIAL; these tests do not alter Developer 1 ownership or integration boundaries.
 
 ## 9. Collaboration and next steps
 
