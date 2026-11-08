@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `3c85724` (BE-45 Phase 2; successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,762 passed, 0 failed**
+**Last reported commit:** `7301d6b` (BE-41 Phase 2; successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,778 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -144,6 +144,18 @@ The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG
 
 [`replenishment.py`](replenishment.py) calculates a provisional quantity `max(0, ceil(forecast_demand - available_qty))` from supplied inputs. It **does not** read inventory or create purchases. **Recorded new tests:** 61. **Remaining:** authoritative BE-20 availability, agreed units/policies, supplier alternatives, service/AI/API integration.
 
+#### BE-41 Phase 2 — Forecast-to-Replenishment Composition
+
+Added [`replenishment_service.py`](replenishment_service.py) and [`test_replenishment_service.py`](tests/test_replenishment_service.py), with **16 passing tests**.
+
+The provisional internal service combines BE-45 date-aware forecast availability with the existing BE-41 replenishment calculation. An unavailable forecast, including missing date coverage or failed reliability checks, returns no replenishment recommendation. A valid zero forecast remains available and is passed to the existing calculation; it is not treated as an unavailable forecast.
+
+No inventory changes, purchase orders, or database operations occur. The service does not establish that supplied stock is authoritative. Authoritative available stock, matching item/branch identity, compatible quantity units, and an appropriate forecast horizon remain caller/integration responsibilities.
+
+**Commit:** `7301d6b` on `backend-dev2`; **GitHub push:** successful. **Latest full backend suite:** **1,778 passed, 0 failed**.
+
+**BE-41 remains PARTIAL.**
+
 ### BE-42 — Supplier & Branch Alternative Comparison, Phase 1
 
 [`alternative_comparison.py`](alternative_comparison.py) validates and compares supplied supplier-cost observations using exact `Decimal`, compatible currency/unit/cost basis and explicit unknown-cost handling. The supplier-cost slice is not a real purchase ledger, ranking, or full branch-transfer alternative assessment. **Recorded new tests:** 201. **Remaining:** approved quotes, supplier/branch data, transfer policy, authorization and final selection criteria.
@@ -246,7 +258,7 @@ BE-34 request APIs, BE-35 approval/dispatch, BE-36 receiving/discrepancies and B
 - **Inventory:** reads/changes need authoritative availability and an append-only movement ledger. Receiving, dispatch, cancellation and duplicate detection must be coordinated in **durable atomic transactions**, not by pure helpers or in-memory flags.
 - **Dates and reporting:** align timezone, eligibility, source completeness, report definitions, snapshot cutoff, and unique source identities before cross-branch/historical comparisons. Missing records are not implicit zeros.
 - **AI:** use trusted scoped inputs, safe error messages, no secrets in logs/output; verify model/provider access before enabling live calls. Tests with mocks do not prove live service availability.
-- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,762 local tests.
+- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,778 local tests.
 
 ## 7. AI environment and dependency notes
 
@@ -282,7 +294,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-45 Phase 2: **1,762 passed, 0 failed**. **Historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-41 Phase 2: **1,778 passed, 0 failed**. **Historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ## 9. Collaboration and next steps
 
