@@ -3,7 +3,7 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `70b7ffa` (successfully pushed to GitHub)
+**Last reported commit:** `97289b2` (successfully pushed to GitHub)
 **Last user-confirmed full-suite run:** **1,797 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
@@ -76,6 +76,25 @@ Added `backend/tests/test_purchase_order_routes.py` containing **84 passing isol
 **Commit:** `c6e7764` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,650 passed, 0 failed**.
 
 **BE-29 remains PARTIAL.**
+
+### BE-29 Phase 3 — Purchase Order API Integration Readiness
+
+**Already implemented and tested:** The provisional `POST /api/purchase-orders` Blueprint accepts a JSON object with root fields `supplier_id`, `branch_id`, and nonempty `items`; each item permits `product_id`, `variant_id`, `quantity`, and `purchase_cost`. It rejects unknown root/item fields, validates positive built-in integer IDs and quantities, and accepts a product reference, variant reference, or both. Costs are checked as finite and nonnegative without float support. Invalid requests return HTTP 400; valid structural requests return HTTP 501 with a pending-integration message. The existing route suite records 84 tests covering malformed bodies, field/type/cost validation, unknown metadata, accepted structural variations, and the 501 response. The route and validator do not create orders or change inventory.
+
+**Verified available dependencies:** The route uses Flask and the provisional validator. `backend/app.py` currently exposes only `/api/health`; it does not register the Purchase Order Blueprint. The outer backend contains no usable authentication/RBAC interface, purchase-order model/schema, repository, or persistence service; `backend/db.py` is empty. The presence of a MySQL connector dependency, if installed, is not a database contract.
+
+**Existing references are not verified relationships:** `supplier_id`, `branch_id`, and item `product_id`/`variant_id` receive structural checks only. The route does not establish that these records exist, belong to the same business, are active, or are mutually compatible. There is no established supplier, product, variant, or business/branch ownership contract to load or authorize against. Client-supplied business/user/role/permission metadata is rejected; the eventual business scope must come from trusted server-side identity and authorization, not the request body.
+
+**Missing or unapproved decisions:** Approve order and line schema, status/lifecycle, generated order reference, currency and cost basis, field limits and normalization, supplier/branch ownership rules, product-versus-variant relationship and whether both may be supplied, duplicate line behavior, supplier eligibility, price/quantity policies, idempotency, and response/error semantics. The provisional validator's field names and accepted values do not settle these database or business rules.
+
+**Blocked integration checklist (do not replace HTTP 501 yet):**
+
+1. **Developer 1 / authentication and database owners:** provide trusted actor/business/branch context and the authorization interface; approve PO, line, supplier, product, and variant schema/relationships, constraints, repository/service contracts, and transaction ownership.
+2. **Team/API owners:** approve request/response and error contracts, cost/quantity semantics, reference rules, duplicate/idempotency behavior, and order lifecycle. Resolve required business decisions before changing validation.
+3. **Developer 2, after contracts are available:** update the route/validation integration to authorize the trusted business and branch, load and verify supplier/product/variant ownership and eligibility through approved services, enforce the approved allowlist and rules, and create the order through the approved transactional persistence interface. Do not trust client-supplied identifiers as authorization or status.
+4. **Developer 1 and Developer 2 together:** test authentication failures, cross-business/branch and invalid-resource references, validation boundaries, transaction rollback, duplicate/retry behavior, response disclosure, and the invariant that purchase-order creation does not update inventory. Register the Blueprint only after integration and deployment ownership explicitly approve it.
+
+Until these contracts and tests exist, real order creation, authorization, supplier/product/variant lookup, persistence, transaction guarantees, and deployment wiring remain blocked. Keep the Blueprint unregistered in `app.py` and BE-29 **PARTIAL**. Authentication and database/schema ownership remain with Developer 1; Developer 2 integration work is contingent on those interfaces and approved business decisions.
 
 ### BE-30 — Purchase Receiving, Phase 1
 
