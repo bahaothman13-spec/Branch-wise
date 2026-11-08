@@ -3,7 +3,7 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `c7c8669` (BE-53 Phase 3; successfully pushed to GitHub)
+**Last reported commit:** `70b7ffa` (successfully pushed to GitHub)
 **Last user-confirmed full-suite run:** **1,797 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
@@ -239,6 +239,25 @@ GitHub push: Successful
 Historical full backend test suite after BE-28 Phase 2: 1,566 passed, 0 failed.
 
 BE-28 remains PARTIAL.
+
+### BE-28 Phase 3 — Supplier API Integration Readiness
+
+**Already implemented and tested:** `supplier_validation.py` performs basic required-name, optional-string, and email-syntax checks. The isolated `supplier_bp` at `POST /api/suppliers` rejects non-JSON/non-object bodies and unknown request fields, including client-supplied `business_id`; invalid input returns HTTP 400 and structurally valid input returns HTTP 501. Seven route tests cover these provisional behaviors. The Blueprint remains unregistered in `app.py`.
+
+**Verified available dependencies:** Flask is used by the route, and `mysql-connector-python` is listed in `backend/requirements.txt`. The current `app.py` only exposes `/api/health`. These facts do not provide an authentication integration or usable database persistence contract.
+
+**Missing or unapproved dependencies:** No usable authentication/RBAC interface, supplier model/schema, repository, or supplier service was found in the outer backend workspace; `db.py` is empty. The schema fields and nullability, business ownership relationship, uniqueness scope, field limits, duplicate-name behavior, optional blank/`None` normalization, and create-response/error contract are not approved here. The validator's names and optional-field behavior remain provisional and do not define database columns.
+
+**Blocked integration checklist (do not replace HTTP 501 yet):**
+
+1. **Developer 1 / authentication owner:** provide the trusted authentication context and authorization interface, including how the actor's business scope and supplier-create permission are established. Never accept client-supplied identity, role, permission, or `business_id` as authority.
+2. **Developer 1 / database owner:** approve the supplier schema and business relationship, constraints and uniqueness scope, lifecycle/deactivation rules, and the repository/service interface and transaction behavior. Confirm deployment configuration and migrations separately; an installed connector alone is not persistence integration.
+3. **Team/API owners:** approve request/response fields, optional-value semantics, field-length and phone policies, duplicate handling, and HTTP status/error mapping. Align validation with the approved storage constraints without silently normalizing or discarding input.
+4. **Developer 2, after contracts are supplied:** adapt the route to authenticate, authorize the trusted business scope, validate only the approved allowlisted payload, call the approved persistence service, and return the approved response. Keep `business_id` server-derived rather than client-controlled.
+5. **Developer 1 and Developer 2 together:** add integration tests for unauthorized and cross-business requests, persistence success/failure and duplicate conflicts, transaction behavior, and response disclosure. Only after these pass and ownership agrees should the Blueprint be considered for main-app registration.
+
+Until those dependencies and decisions are provided, no real supplier creation, authentication, authorization, or database write is available; keep the provisional Blueprint unregistered and BE-28 **PARTIAL**. These readiness notes do not change Developer 1 ownership of authentication or database contracts.
+
 ## 5. Deferred transfer tasks (BE-34–BE-37)
 
 There is **no new Dev2 transfer implementation**. A read-only review examined the cached `origin/backend-dev1` version of `backend/transfer_rules.py` and its tests. That module contains pure branch/item validation, dispatch/receipt quantity and discrepancy calculations, and lifecycle transition checks; duplicating it on Dev2 would create unnecessary ownership conflicts.
