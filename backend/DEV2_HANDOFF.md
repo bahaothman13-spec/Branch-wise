@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `fe80806` (BE-53 Phase 2; successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,790 passed, 0 failed**
+**Last reported commit:** `c7c8669` (BE-53 Phase 3; successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,797 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -301,6 +301,12 @@ The latest reported full suite after BE-53 Phase 2: **1,790 passed, 0 failed**. 
 [`test_forecast_replenishment_pipeline.py`](tests/test_forecast_replenishment_pipeline.py) contains **12 passing tests** that exercise the real BE-39 → BE-45 → BE-41 pipeline, including BE-40 forecasting. Coverage includes missing dates, observed zero sales, unavailable forecasts, business/branch/variant isolation, duplicate daily observations, and input immutability.
 
 These are offline tests using synthetic observations and stock inputs, not real MySQL, authentication, or inventory integration tests. **Commit:** `fe80806` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,790 passed, 0 failed**. Relevant implementation tasks remain PARTIAL; these tests do not alter Developer 1 ownership or integration boundaries.
+
+### BE-53 Phase 3 — Provisional API Integration Regression Tests
+
+[`test_provisional_routes_integration.py`](tests/test_provisional_routes_integration.py) adds **7 passing tests**: three verify that the provisional Supplier, Purchase Order, and Purchase Receiving Blueprints coexist in one isolated Flask app and each returns its own HTTP 501 response; one verifies all three endpoints remain unregistered in the main Flask app; and three guard known database and network side-effect boundaries for valid provisional requests.
+
+These tests do **not** establish real authentication, authorization, persistence, or inventory safety. The provisional APIs remain unregistered and the relevant implementation tasks remain PARTIAL. **Commit:** `c7c8669` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,797 passed, 0 failed**. No Developer 1 ownership boundaries are changed.
 
 ## 9. Collaboration and next steps
 
