@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-08
-**Last reported commit:** `4856b80` (BE-30 Phase 2)
-**Last user-confirmed full-suite run:** **1,740 passed, 0 failed**
+**Last reported commit:** `3c85724` (BE-45 Phase 2; successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,762 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -160,6 +160,18 @@ The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG
 
 [`forecast_reliability.py`](forecast_reliability.py) distinguishes an **unavailable forecast** from a legitimate predicted zero and prepares guarded status handling. **Recorded new tests:** 42. **Remaining:** end-to-end availability/low-data/failure fallbacks, service wiring, user-facing messages and operational verification.
 
+#### BE-45 Phase 2 — Date-aware Forecast Availability
+
+Added [`forecast_availability.py`](forecast_availability.py) and [`test_forecast_availability.py`](tests/test_forecast_availability.py), with **22 passing tests**.
+
+The adapter accepts an explicit reporting interval and already-authorized daily observations. It distinguishes an explicitly observed zero-sales day from a missing date, and returns an unavailable result without forecasting when date coverage is incomplete. With complete coverage, it reuses the existing BE-39 daily-history preparation, BE-40 demand forecast, and BE-45 reliability helpers without changing their aggregation or forecasting formulas.
+
+Complete coverage of supplied observations does **not** prove database source completeness or authorization; trusted retrieval, source eligibility, and access checks remain caller responsibilities.
+
+**Commit:** `3c85724` on `backend-dev2`; **GitHub push:** successful. **Latest full backend suite:** **1,762 passed, 0 failed**.
+
+**BE-45 remains PARTIAL.**
+
 ## 4. Dashboards, reports and export (BE-46–BE-50)
 
 ### BE-46 — Dashboard Summary APIs, Phase 1
@@ -234,7 +246,7 @@ BE-34 request APIs, BE-35 approval/dispatch, BE-36 receiving/discrepancies and B
 - **Inventory:** reads/changes need authoritative availability and an append-only movement ledger. Receiving, dispatch, cancellation and duplicate detection must be coordinated in **durable atomic transactions**, not by pure helpers or in-memory flags.
 - **Dates and reporting:** align timezone, eligibility, source completeness, report definitions, snapshot cutoff, and unique source identities before cross-branch/historical comparisons. Missing records are not implicit zeros.
 - **AI:** use trusted scoped inputs, safe error messages, no secrets in logs/output; verify model/provider access before enabling live calls. Tests with mocks do not prove live service availability.
-- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,740 local tests.
+- **Testing:** keep unit and isolated HTTP tests plus later DB transaction, concurrency/idempotency, authorization, and frontend/backend integration tests. These later integration suites are not yet covered by the last reported 1,762 local tests.
 
 ## 7. AI environment and dependency notes
 
@@ -270,7 +282,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-30 Phase 2: **1,740 passed, 0 failed**. **Historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earlier historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-45 Phase 2: **1,762 passed, 0 failed**. **Historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ## 9. Collaboration and next steps
 
