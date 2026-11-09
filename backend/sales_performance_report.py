@@ -102,6 +102,9 @@ def calculate_sales_performance_report(
     Return scope/date/context labels, summary (transaction_count, total_quantity,
     total_sales_value), products (product_id, quantity, sales_value), and
     daily_totals (date, transaction_count, total_quantity, total_sales_value).
+    daily_product_totals contains observed date/product groups with date,
+    product_id, transaction_count, total_quantity, and total_sales_value,
+    sorted by date then by product identifier (integers before strings).
     Transaction counting deduplicates typed IDs overall and within each day;
     every selected line contributes to quantity/value totals, including repeated
     lines. Source-line deduplication is the caller's responsibility. Products
@@ -131,6 +134,7 @@ def calculate_sales_performance_report(
     transactions = set()
     products = {}
     daily = {}
+    daily_products = {}
     all_values = []
     total_quantity = 0
     for row in observations:
@@ -166,6 +170,16 @@ def calculate_sales_performance_report(
         daily[day]["transactions"].add(transaction_id)
         daily[day]["total_quantity"] += quantity
         daily[day]["values"].append(value)
+        daily_product_key = (day, product_id)
+        if daily_product_key not in daily_products:
+            daily_products[daily_product_key] = {
+                "transactions": set(),
+                "total_quantity": 0,
+                "values": [],
+            }
+        daily_products[daily_product_key]["transactions"].add(transaction_id)
+        daily_products[daily_product_key]["total_quantity"] += quantity
+        daily_products[daily_product_key]["values"].append(value)
         if product_id not in products:
             products[product_id] = {"quantity": 0, "values": []}
         products[product_id]["quantity"] += quantity
@@ -188,6 +202,21 @@ def calculate_sales_performance_report(
         }
         for day in sorted(daily)
     ]
+    daily_product_totals = [
+        {
+            "date": day,
+            "product_id": product_id,
+            "transaction_count": len(daily_products[(day, product_id)]["transactions"]),
+            "total_quantity": daily_products[(day, product_id)]["total_quantity"],
+            "total_sales_value": _sum_sales_values(
+                daily_products[(day, product_id)]["values"]
+            ),
+        }
+        for day, product_id in sorted(
+            daily_products,
+            key=lambda key: (key[0], isinstance(key[1], str), key[1]),
+        )
+    ]
     return {
         "business_id": business_id,
         "branch_id": branch_id,
@@ -201,4 +230,5 @@ def calculate_sales_performance_report(
         },
         "products": product_totals,
         "daily_totals": daily_totals,
+        "daily_product_totals": daily_product_totals,
     }
