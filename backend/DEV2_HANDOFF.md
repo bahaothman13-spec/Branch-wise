@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-09
-**Last reported commit:** `cfb5510` (successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,799 passed, 0 failed**
+**Last reported commit:** `b8f8bf7` (successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,800 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -35,7 +35,7 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | **BE-45** AI Reliability, Validation & Fallback Handling | Phase 1: forecast availability/reliability handling | [`forecast_reliability.py`](forecast_reliability.py) | [`test_forecast_reliability.py`](tests/test_forecast_reliability.py) | PARTIAL |
 | **BE-46** Dashboard Summary APIs | Phase 1: low/out-of-stock alert summaries | [`dashboard_stock_alerts.py`](dashboard_stock_alerts.py) | [`test_dashboard_stock_alerts.py`](tests/test_dashboard_stock_alerts.py) | PARTIAL |
 | **BE-47** Sales & Product Performance Reports | Phases 1–3: sales/product calculations, observed-day and date/product breakdowns | [`sales_performance_report.py`](sales_performance_report.py) | [`test_sales_performance_report.py`](tests/test_sales_performance_report.py) | PARTIAL |
-| **BE-48** Inventory & Purchase Reports | Phase 1: inventory snapshot quantity summary; purchase-report slice deferred | [`inventory_snapshot_report.py`](inventory_snapshot_report.py) | [`test_inventory_snapshot_report.py`](tests/test_inventory_snapshot_report.py) | PARTIAL |
+| **BE-48** Inventory & Purchase Reports | Phase 1: inventory snapshot quantity summary; Phase 2: per-group contribution counts; purchase-report slice deferred | [`inventory_snapshot_report.py`](inventory_snapshot_report.py) | [`test_inventory_snapshot_report.py`](tests/test_inventory_snapshot_report.py) | PARTIAL |
 | **BE-49** Business & Branch Comparison Reports | Phase 1: same-business branch sales-summary preparation | [`branch_comparison_report.py`](branch_comparison_report.py) | [`test_branch_comparison_report.py`](tests/test_branch_comparison_report.py) | PARTIAL |
 | **BE-50** Report Filtering & Export APIs | Phase 1: safe in-memory CSV; **Phase 2: exact `Decimal` CSV support** | [`report_export.py`](report_export.py) | [`test_report_export.py`](tests/test_report_export.py) | PARTIAL |
 
@@ -233,6 +233,14 @@ BE-47 remains **PARTIAL**: trusted data retrieval, authorization, and source com
 
 `summarize_inventory_snapshot()` in [`inventory_snapshot_report.py`](inventory_snapshot_report.py) aggregates **one explicitly identified** business/branch inventory snapshot by product/variant, unit and quantity basis, using exact signed built-in integers. It rejects mixed snapshots and repeated source contribution IDs, without claiming source completeness/non-overlap. **Do not add quantities across different snapshots.** **Recorded new tests:** 116. **Recorded commit:** `242fd6c`. **Remaining:** BE-20 authoritative inventory, BE-31 purchase report contracts, financial valuation policy if applicable, Flask/export and authorization. Purchase calculations were deferred.
 
+#### BE-48 Phase 2 — Inventory Snapshot Contribution Counts
+
+Each existing inventory snapshot group now includes `contribution_count`, counting accepted supplied observations after the existing duplicate-identity validation and grouping by product, variant, quantity unit, and quantity basis. Existing quantity calculations and deterministic group ordering are unchanged. Quantities remain built-in integers under the current contract; no Decimal quantity behavior was introduced. Counts describe supplied contributions only and do not establish inventory completeness or source authenticity.
+
+**Recorded BE-48 tests:** 117 passed. **Full backend suite:** 1,800 passed, 0 failed. **Commit:** `b8f8bf7` on `backend-dev2`; **GitHub push:** successful.
+
+BE-48 remains **PARTIAL**: trusted inventory retrieval, authorization, and source completeness remain upstream dependencies. Developer 1's ownership of authentication, database, and authorization contracts is unchanged.
+
 ### BE-49 — Business & Branch Comparison Reports, Phase 1
 
 `prepare_branch_sales_comparison(branch_reports, *, business_id, report_definition_context)` in [`branch_comparison_report.py`](branch_comparison_report.py) prepares **already-computed BE-47 summaries from branches of the same business**, requiring compatible dates/currency/unit/value basis and caller-established report definitions. It preserves `Decimal` representations and counts, returns branch-ordered independent results, and **does not** rank branches, calculate growth/differences or invent missing zero-valued rows. **Recorded new tests:** 155. **Recorded commit:** `e6f0fd6`. **Remaining:** trusted multi-branch RBAC, equivalent data definitions, approved KPIs, inventory snapshot alignment, Flask/export.
@@ -348,7 +356,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-47 Phase 3: **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-48 Phase 2: **1,800 passed, 0 failed**. **Historical result after BE-47 Phase 3:** **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ### BE-53 Phase 2 — Offline Forecast-to-Replenishment Pipeline Regression Tests
 
