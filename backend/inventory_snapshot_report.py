@@ -84,7 +84,8 @@ def summarize_inventory_snapshot(
     PROVISIONAL output contract:
     Return business_id, branch_id, snapshot_id, snapshot_date, and groups.
     Each group has product_id, product_variant_id, quantity_unit, quantity_basis,
-    and quantity. Sort product IDs, then variant IDs (integers before strings,
+    quantity, and contribution_count, the number of accepted observations in
+    that group. Sort product IDs, then variant IDs (integers before strings,
     ascending within each type), then unit and basis text. This is not a ranking.
     Do not combine groups into a total across products, units, or bases.
     An observed zero remains a group. Empty input returns groups=[], which
@@ -128,7 +129,10 @@ def summarize_inventory_snapshot(
 
         contributions_seen.add(contribution_id)
         group = (product_id, variant_id, unit, basis)
-        totals[group] = totals.get(group, 0) + quantity
+        if group not in totals:
+            totals[group] = {"quantity": 0, "contribution_count": 0}
+        totals[group]["quantity"] += quantity
+        totals[group]["contribution_count"] += 1
 
     groups = []
     for group in sorted(totals, key=_group_sort_key):
@@ -138,6 +142,7 @@ def summarize_inventory_snapshot(
             "product_variant_id": variant_id,
             "quantity_unit": unit,
             "quantity_basis": basis,
-            "quantity": totals[group],
+            "quantity": totals[group]["quantity"],
+            "contribution_count": totals[group]["contribution_count"],
         })
     return {**scope, "snapshot_date": snapshot_date, "groups": groups}

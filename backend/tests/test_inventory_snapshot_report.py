@@ -55,13 +55,14 @@ def summarize(rows, **changes):
     return summarize_inventory_snapshot(rows, **context)
 
 
-def group(quantity, **changes):
+def group(quantity, contribution_count=1, **changes):
     expected = {
         "product_id": 3,
         "product_variant_id": 4,
         "quantity_unit": "each",
         "quantity_basis": "caller-defined-test-basis",
         "quantity": quantity,
+        "contribution_count": contribution_count,
     }
     expected.update(changes)
     return expected
@@ -104,8 +105,25 @@ def test_normal_aggregation_returns_only_explicit_snapshot_and_quantity_groups()
         "branch_id": 2,
         "snapshot_id": "test-snapshot-1",
         "snapshot_date": "2026-11-01",
-        "groups": [group(10)],
+        "groups": [group(10, contribution_count=2)],
     }
+
+
+def test_contribution_count_matches_validated_rows_per_group_without_mutation():
+    rows = [
+        observation("first", quantity=4),
+        observation("second", quantity=6),
+        observation("third", product_variant_id=8, quantity=7),
+    ]
+    original = deepcopy(rows)
+
+    result = summarize(rows)
+
+    assert result["groups"] == [
+        group(10, contribution_count=2),
+        group(7, product_variant_id=8),
+    ]
+    assert rows == original
 
 
 def test_products_variants_units_and_bases_form_separate_groups():
@@ -115,10 +133,11 @@ def test_products_variants_units_and_bases_form_separate_groups():
         observation("c", quantity_unit="box", quantity=2),
         observation("d", quantity_basis="other-test-basis", quantity=11),
         observation("e", quantity=3),
+        observation("f", quantity=3),
     ]
     assert summarize(rows)["groups"] == [
         group(2, quantity_unit="box"),
-        group(3),
+        group(6, contribution_count=2),
         group(11, quantity_basis="other-test-basis"),
         group(5, product_variant_id=8),
         group(7, product_id=9),
@@ -199,7 +218,7 @@ def test_repeating_the_same_observation_object_is_also_a_duplicate():
 
 def test_integer_and_string_contribution_identifiers_are_distinct():
     result = summarize([observation(1, quantity=2), observation("1", quantity=3)])
-    assert result["groups"] == [group(5)]
+    assert result["groups"] == [group(5, contribution_count=2)]
 
 
 @pytest.mark.parametrize("rows", [[], ()])
@@ -223,7 +242,10 @@ def test_signed_quantities_are_summed_without_classifying_their_meaning():
         observation("b", quantity=3),
         observation("c", product_variant_id=8, quantity=0),
     ])
-    assert result["groups"] == [group(-4), group(0, product_variant_id=8)]
+    assert result["groups"] == [
+        group(-4, contribution_count=2),
+        group(0, product_variant_id=8),
+    ]
 
 
 @pytest.mark.parametrize("first,second,expected", [
@@ -232,7 +254,7 @@ def test_signed_quantities_are_summed_without_classifying_their_meaning():
 ], ids=["large-exact-sum", "large-cancellation-to-observed-zero"])
 def test_large_integer_arithmetic_is_exact(first, second, expected):
     result = summarize([observation("a", quantity=first), observation("b", quantity=second)])
-    assert result["groups"] == [group(expected)]
+    assert result["groups"] == [group(expected, contribution_count=2)]
     assert type(result["groups"][0]["quantity"]) is int
 
 
