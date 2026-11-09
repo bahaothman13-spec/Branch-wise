@@ -100,13 +100,16 @@ def calculate_sales_performance_report(
 
     Provisional output contract:
     Return scope/date/context labels, summary (transaction_count, total_quantity,
-    total_sales_value), and products (product_id, quantity, sales_value).
-    Transaction counting deduplicates typed IDs; every selected line contributes
-    to quantity/value totals, including repeated lines. Source-line deduplication
-    is the caller's responsibility. Products sort by identifier: integers first,
-    then strings, ascending within each type. This is not a performance ranking.
-    Empty selections return zero totals and no products; they do not establish
-    that the source is complete or that the business had no sales.
+    total_sales_value), products (product_id, quantity, sales_value), and
+    daily_totals (date, transaction_count, total_quantity, total_sales_value).
+    Transaction counting deduplicates typed IDs overall and within each day;
+    every selected line contributes to quantity/value totals, including repeated
+    lines. Source-line deduplication is the caller's responsibility. Products
+    sort by identifier: integers first, then strings, ascending within each type.
+    Daily totals include only observed dates and sort chronologically; missing
+    dates are not fabricated. Empty selections return zero overall totals and
+    empty products/daily_totals; they do not establish source completeness or
+    that the business had no sales.
 
     Money stays Decimal with no rounding, currency conversion, or quantization.
     Inputs are unchanged, output containers are fresh, and invalid input raises
@@ -127,6 +130,7 @@ def calculate_sales_performance_report(
 
     transactions = set()
     products = {}
+    daily = {}
     all_values = []
     total_quantity = 0
     for row in observations:
@@ -152,6 +156,16 @@ def calculate_sales_performance_report(
         transactions.add(transaction_id)
         total_quantity += quantity
         all_values.append(value)
+        day = row_date.isoformat()
+        if day not in daily:
+            daily[day] = {
+                "transactions": set(),
+                "total_quantity": 0,
+                "values": [],
+            }
+        daily[day]["transactions"].add(transaction_id)
+        daily[day]["total_quantity"] += quantity
+        daily[day]["values"].append(value)
         if product_id not in products:
             products[product_id] = {"quantity": 0, "values": []}
         products[product_id]["quantity"] += quantity
@@ -165,6 +179,15 @@ def calculate_sales_performance_report(
             "quantity": product["quantity"],
             "sales_value": _sum_sales_values(product["values"]),
         })
+    daily_totals = [
+        {
+            "date": day,
+            "transaction_count": len(daily[day]["transactions"]),
+            "total_quantity": daily[day]["total_quantity"],
+            "total_sales_value": _sum_sales_values(daily[day]["values"]),
+        }
+        for day in sorted(daily)
+    ]
     return {
         "business_id": business_id,
         "branch_id": branch_id,
@@ -177,4 +200,5 @@ def calculate_sales_performance_report(
             "total_sales_value": _sum_sales_values(all_values),
         },
         "products": product_totals,
+        "daily_totals": daily_totals,
     }

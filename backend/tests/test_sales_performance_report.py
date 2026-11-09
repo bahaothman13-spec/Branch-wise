@@ -72,6 +72,12 @@ def test_single_sale_has_explicit_scope_context_and_exact_totals():
         "summary": {"transaction_count": 1, "total_quantity": 2,
                     "total_sales_value": Decimal("0.30")},
         "products": [{"product_id": 3, "quantity": 2, "sales_value": Decimal("0.30")}],
+        "daily_totals": [{
+            "date": "2026-11-01",
+            "transaction_count": 1,
+            "total_quantity": 2,
+            "total_sales_value": Decimal("0.30"),
+        }],
     }
 
 
@@ -98,6 +104,49 @@ def test_repeated_lines_still_contribute_but_do_not_repeat_transaction_count():
         "transaction_count": 1, "total_quantity": 6, "total_sales_value": Decimal("0.90"),
     }
     assert result["products"][0]["quantity"] == 6
+
+
+def test_daily_totals_count_distinct_transactions_and_preserve_existing_summaries():
+    rows = [
+        observation(date="2026-11-03", transaction_id="sale-2", product_id=9,
+                    quantity=2, sales_value="0.1000000000000000000000000001"),
+        observation(date="2026-11-01", transaction_id="sale-1", product_id=3,
+                    quantity=1, sales_value="0.01"),
+        observation(date="2026-11-03", transaction_id="sale-2", product_id=3,
+                    quantity=3, sales_value="0.20"),
+        observation(date="2026-11-03", transaction_id="sale-3", product_id=9,
+                    quantity=4, sales_value="0.3000000000000000000000000002"),
+    ]
+
+    result = calculate(rows)
+
+    assert result["daily_totals"] == [
+        {
+            "date": "2026-11-01",
+            "transaction_count": 1,
+            "total_quantity": 1,
+            "total_sales_value": Decimal("0.01"),
+        },
+        {
+            "date": "2026-11-03",
+            "transaction_count": 2,
+            "total_quantity": 9,
+            "total_sales_value": Decimal("0.6000000000000000000000000003"),
+        },
+    ]
+    assert result["summary"] == {
+        "transaction_count": 3,
+        "total_quantity": 10,
+        "total_sales_value": Decimal("0.6100000000000000000000000003"),
+    }
+    assert result["products"] == [
+        {"product_id": 3, "quantity": 4, "sales_value": Decimal("0.21")},
+        {
+            "product_id": 9,
+            "quantity": 6,
+            "sales_value": Decimal("0.4000000000000000000000000003"),
+        },
+    ]
 
 
 def test_transaction_and_product_identifiers_preserve_types_without_ranking():
@@ -167,6 +216,12 @@ def test_zero_values_are_counted_as_supplied_observations():
         "transaction_count": 1, "total_quantity": 0, "total_sales_value": Decimal("0"),
     }
     assert len(result["products"]) == 1
+    assert result["daily_totals"] == [{
+        "date": "2026-11-01",
+        "transaction_count": 1,
+        "total_quantity": 0,
+        "total_sales_value": Decimal("0"),
+    }]
 
 
 def test_quantities_use_exact_integer_arithmetic():
@@ -182,6 +237,11 @@ def test_date_filter_is_inclusive_and_counts_only_selected_transactions():
     assert result["summary"] == {
         "transaction_count": 3, "total_quantity": 6, "total_sales_value": Decimal("0.90"),
     }
+    assert [row["date"] for row in result["daily_totals"]] == [
+        "2026-11-01",
+        "2026-11-02",
+        "2026-11-03",
+    ]
 
 
 def test_single_day_leap_date_range():
@@ -211,6 +271,7 @@ def test_empty_selection_has_zero_totals_and_no_products(rows):
     }
     assert type(result["summary"]["total_sales_value"]) is Decimal
     assert result["products"] == []
+    assert result["daily_totals"] == []
 
 
 @pytest.mark.parametrize("field", ["business_id", "branch_id"])
