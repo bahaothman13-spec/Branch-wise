@@ -3,8 +3,8 @@
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
 **Documentation snapshot:** 2026-11-09
-**Last reported commit:** `6c64622` (successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,801 passed, 0 failed**
+**Last reported commit:** `29d357c` (successfully pushed to GitHub)
+**Last user-confirmed full-suite run:** **1,802 passed, 0 failed**
 **Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -356,7 +356,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-53 Phase 4: **1,801 passed, 0 failed**. **Historical result after BE-48 Phase 2:** **1,800 passed, 0 failed**. **Historical result after BE-47 Phase 3:** **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-53 Phase 5: **1,802 passed, 0 failed**. **Historical result after BE-53 Phase 4:** **1,801 passed, 0 failed**. **Historical result after BE-48 Phase 2:** **1,800 passed, 0 failed**. **Historical result after BE-47 Phase 3:** **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ### BE-53 Phase 2 — Offline Forecast-to-Replenishment Pipeline Regression Tests
 
@@ -375,6 +375,12 @@ These tests do **not** establish real authentication, authorization, persistence
 [`test_sales_report_consistency.py`](tests/test_sales_report_consistency.py) adds **1 passing offline test** using synthetic observations and the real BE-47 report function. It verifies reconciliation of exact `Decimal` sales totals across overall, product, daily, and daily-product aggregations; quantity consistency; inclusive date filtering; and input immutability. It also confirms that distinct transaction counts must not be summed across overlapping product groups, because one transaction may contribute to multiple products.
 
 The test does **not** verify real database access, authorization, or source completeness. It does not change BE-47's or other implementation tasks' PARTIAL status or Developer 1's ownership of authentication, database, and authorization contracts. **Commit:** `6c64622` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,801 passed, 0 failed**.
+
+### BE-53 Phase 5 — Inventory Snapshot Consistency
+
+[`test_inventory_snapshot_consistency.py`](tests/test_inventory_snapshot_consistency.py) adds **1 passing offline test** using synthetic observations and the BE-48 snapshot report function. It verifies that every accepted observation contributes to exactly one group, contribution counts reconcile with accepted observations, and group quantities reconcile by product, variant, quantity unit, and quantity basis. Incompatible units and bases remain isolated, and input observations remain unchanged.
+
+The test does **not** establish real inventory completeness, source authenticity, authentication, or authorization. It does not change task PARTIAL statuses or Developer 1's ownership boundaries. **Commit:** `29d357c` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,802 passed, 0 failed**.
 
 ## 9. Collaboration and next steps
 
