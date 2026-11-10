@@ -125,6 +125,18 @@ Added [`purchase_receiving_routes.py`](purchase_receiving_routes.py) with an iso
 - **Recorded tests:** 132.
 - **Remaining:** trusted database retrieval and source completeness, supplier/order/receipt relations, RBAC, record granularity, dates/timezones, pagination/filtering and Flask API. BE-29/BE-30 input dictionaries are **not** persisted history.
 
+#### BE-29–BE-31 — Runnable Purchasing Components Demo
+
+Added [`examples/purchasing_demo.py`](examples/purchasing_demo.py) to demonstrate the provisional purchase-order and receiving request validation in an isolated Flask test application, plus supplier filtering of caller-supplied synthetic purchase-history records. Run from the repository root:
+
+```powershell
+.\.venv\Scripts\python.exe backend\examples\purchasing_demo.py
+```
+
+Invalid purchase-order and purchase-receiving requests return HTTP 400; structurally valid requests return HTTP 501 because the operations are not implemented. BE-31 demonstrates filtering supplied history by supplier. The demo uses synthetic data: it persists no orders or receipts, updates no inventory, and does not establish a real relationship between the sample history and the requests.
+
+**Focused purchasing tests:** **426 passed**. **Full backend suite:** **1,802 passed, 0 failed**. **Commit:** `dfacd38` on `backend-dev2`; **GitHub push:** successful. This demo does not change the Developer 1 authentication/database ownership boundary or complete production integration. **BE-29, BE-30, and BE-31 remain PARTIAL.**
+
 ## 3. AI and decision support (BE-38–BE-45)
 
 ### BE-38 — AI Service Integration Layer, Phases 1–3
