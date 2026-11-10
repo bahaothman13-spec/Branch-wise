@@ -175,6 +175,20 @@ No inventory changes, purchase orders, or database operations occur. The service
 
 **BE-41 remains PARTIAL.**
 
+#### BE-39–BE-41 — Runnable Forecast-to-Replenishment Demo
+
+Added [`examples/forecast_replenishment_demo.py`](examples/forecast_replenishment_demo.py), a runnable synthetic-data demonstration of the existing historical-sales → forecasting → replenishment pipeline. From the repository root, run:
+
+```powershell
+.\.venv\Scripts\python.exe backend\examples\forecast_replenishment_demo.py
+```
+
+The complete-history scenario produces a daily average of **5.0**, a forecast total of **20.0**, and a replenishment recommendation of **15**. The missing-history scenario identifies **November 2, 2026** as missing and returns no forecast or recommendation. The demo calls the existing pipeline and does not duplicate its calculations.
+
+The demo uses synthetic observations and an explicitly supplied example available quantity. It does not provide real database, authentication, or inventory integration; existing ownership and integration boundaries remain unchanged. **Focused BE-39–BE-41 tests:** **258 passed**. **Full backend suite:** **1,802 passed, 0 failed**. **Commit:** `1fd2601` on `backend-dev2`; **GitHub push:** successful.
+
+BE-39, BE-40, and BE-41 remain **PARTIAL** pending approved sales and inventory sources, trusted authorization, and agreed business/API contracts.
+
 ### BE-42 — Supplier & Branch Alternative Comparison, Phase 1
 
 [`alternative_comparison.py`](alternative_comparison.py) validates and compares supplied supplier-cost observations using exact `Decimal`, compatible currency/unit/cost basis and explicit unknown-cost handling. The supplier-cost slice is not a real purchase ledger, ranking, or full branch-transfer alternative assessment. **Recorded new tests:** 201. **Remaining:** approved quotes, supplier/branch data, transfer policy, authorization and final selection criteria.
