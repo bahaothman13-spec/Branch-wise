@@ -2,12 +2,14 @@ import os
 
 from dotenv import load_dotenv
 from flask import Flask, request
-from sqlalchemy.engine import make_url
+from sqlalchemy.engine import make_url # type: ignore
 from werkzeug.exceptions import HTTPException
 
 from routes.auth import auth_bp
+from routes.account_settings import account_settings_bp
 from routes.branches import branches_bp
 from routes.health import health_bp
+from routes.products import products_bp
 from routes.users import users_bp
 from response_helpers import error_response
 from rate_limiting import LoginRateLimitConfig
@@ -140,8 +142,10 @@ def create_app(config=None):
 
     app.register_blueprint(health_bp)
     app.register_blueprint(auth_bp)
+    app.register_blueprint(account_settings_bp)
     app.register_blueprint(branches_bp)
     app.register_blueprint(users_bp)
+    app.register_blueprint(products_bp)
 
     @app.before_request
     def enforce_request_body_limit():
