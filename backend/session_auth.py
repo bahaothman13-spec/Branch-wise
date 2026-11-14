@@ -320,12 +320,12 @@ def install_session_auth(
 
 
 def require_authenticated_session(view):
-    """Protect a future Flask route with a session cookie and CSRF checks.
+    """Protect a Flask route with a session cookie and CSRF checks.
 
     The resolved trusted context is available as ``g.authenticated_session``.
     State-changing methods require the matching readable CSRF cookie and
-    ``X-CSRF-Token`` header. Routes remain unprotected until explicitly wrapped
-    and a session manager is installed with trusted services.
+    ``X-CSRF-Token`` header. A wrapped route fails closed unless a session
+    manager is installed with trusted services.
     """
 
     @wraps(view)

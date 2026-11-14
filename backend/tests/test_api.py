@@ -1,4 +1,4 @@
-"""API tests for routes that are waiting for database integration."""
+"""API tests for placeholder routes and unauthenticated account access."""
 
 import pytest
 
@@ -6,10 +6,15 @@ from app import create_app
 
 
 @pytest.fixture
-def client():
-    """Create a Flask test client without starting a server or database."""
-    app = create_app()
-    app.config["TESTING"] = True
+def client(owner_client):
+    """Create an authenticated Owner client without a database adapter."""
+    return owner_client[1]
+
+
+@pytest.fixture
+def unauthenticated_client():
+    """Create a client for explicit missing-session checks."""
+    app = create_app({"APP_ENV": "test", "TESTING": True})
     return app.test_client()
 
 
@@ -142,8 +147,8 @@ def test_login_with_invalid_input_returns_400(client, login_data):
     assert response.status_code == 400
 
 
-def test_logout_returns_501_until_sessions_are_implemented(client):
-    response = client.post("/api/auth/logout")
+def test_logout_returns_501_until_sessions_are_implemented(unauthenticated_client):
+    response = unauthenticated_client.post("/api/auth/logout")
 
     assert response.status_code == 501
 
@@ -160,7 +165,7 @@ def test_branch_creation_with_valid_input_returns_501(client):
     )
 
     assert response.status_code == 501
-    assert "authentication" in response.get_json()["message"]
+    assert response.get_json() == {"error": "Branch persistence is not available."}
 
 
 def test_branch_creation_without_optional_fields_returns_501(client):
@@ -173,7 +178,7 @@ def test_branch_list_returns_501_until_authentication_and_database_are_ready(cli
     response = client.get("/api/branches")
 
     assert response.status_code == 501
-    assert "authentication" in response.get_json()["message"]
+    assert response.get_json() == {"error": "Branch persistence is not available."}
 
 
 def test_branch_details_with_positive_id_returns_501(client):
@@ -186,7 +191,7 @@ def test_branch_deactivation_with_positive_id_returns_501(client):
     response = client.patch("/api/branches/1/deactivate")
 
     assert response.status_code == 501
-    assert "authentication" in response.get_json()["message"]
+    assert response.get_json() == {"error": "Branch persistence is not available."}
 
 
 @pytest.mark.parametrize("branch_id", ["0", "abc", "-1"])
@@ -212,7 +217,7 @@ def test_branch_update_with_valid_data_returns_501(client):
     )
 
     assert response.status_code == 501
-    assert "authentication" in response.get_json()["message"]
+    assert response.get_json() == {"error": "Branch persistence is not available."}
 
 
 @pytest.mark.parametrize(
@@ -282,7 +287,7 @@ def test_user_creation_rejects_boolean_branch_ids(client, branch_id):
     )
 
     assert response.status_code == 400
-    assert response.get_json()["errors"]["branch_id"] == "Must be an integer."
+    assert response.get_json()["errors"]["branch_id"] == "Must be a positive integer."
 
 
 @pytest.mark.parametrize(
@@ -337,8 +342,8 @@ def test_user_status_change_with_invalid_input_returns_400(client, user_id, stat
     assert response.status_code == 400
 
 
-def test_password_change_with_valid_input_returns_501(client):
-    response = client.patch(
+def test_password_change_without_a_session_returns_401(unauthenticated_client):
+    response = unauthenticated_client.patch(
         "/api/users/me/password",
         json={
             "current_password": "current-password",
@@ -347,7 +352,7 @@ def test_password_change_with_valid_input_returns_501(client):
         },
     )
 
-    assert response.status_code == 501
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -366,10 +371,12 @@ def test_password_change_with_valid_input_returns_501(client):
         {"current_password": "current-password", "new_password": "new-password"},
     ],
 )
-def test_password_change_with_invalid_input_returns_400(client, password_data):
-    response = client.patch("/api/users/me/password", json=password_data)
+def test_password_change_without_a_session_is_rejected_before_body_validation(
+    unauthenticated_client, password_data
+):
+    response = unauthenticated_client.patch("/api/users/me/password", json=password_data)
 
-    assert response.status_code == 400
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
@@ -391,9 +398,7 @@ def test_required_json_bodies_reject_missing_malformed_or_non_object_data(
     response = getattr(client, method)(path, data=body, content_type="application/json")
 
     assert response.status_code == 400
-    assert response.get_json() == {
-        "error": "Request body must be a JSON object."
-    }
+    assert response.get_json() == {"error": "Request body must be a JSON object."}
 
 
 @pytest.mark.parametrize(

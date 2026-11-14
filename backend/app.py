@@ -8,8 +8,10 @@ from werkzeug.exceptions import HTTPException
 from routes.auth import auth_bp
 from routes.account_settings import account_settings_bp
 from routes.branches import branches_bp
+from routes.category_variants import catalog_bp
 from routes.health import health_bp
 from routes.products import products_bp
+from routes.operations import operations_bp
 from routes.users import users_bp
 from response_helpers import error_response
 from rate_limiting import LoginRateLimitConfig
@@ -146,6 +148,8 @@ def create_app(config=None):
     app.register_blueprint(branches_bp)
     app.register_blueprint(users_bp)
     app.register_blueprint(products_bp)
+    app.register_blueprint(catalog_bp)
+    app.register_blueprint(operations_bp)
 
     @app.before_request
     def enforce_request_body_limit():

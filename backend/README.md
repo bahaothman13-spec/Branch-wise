@@ -26,6 +26,20 @@ When neither `DATABASE_URL` nor any `DB_*` values are set, the app uses in-memor
 
 Use `db` from `db.py` for ORM sessions and `migrate` for the Flask-Migrate CLI. The app no longer exposes the previous direct `mysql.connector` connection helper, so application code has one database connection path.
 
+## API coverage and persistence ports
+
+The Flask application factory registers health, authentication, account and business settings, branch and staff management, products/categories/variants, product overview, inventory adjustments, product requests, sales, cancellation requests, and returns APIs. Protected writes require the server-side session cookie plus the matching CSRF cookie and `X-CSRF-Token` header. Permissions and business/branch scope always come from the trusted session and server-loaded repository records.
+
+`repository_contracts.py` defines tenant-scoped ports for branch, user, business settings, shared catalog, and operational transactions. Install adapters explicitly with the matching `install_*_repository` function during application setup. `create_app()` installs no application repository. A missing port returns `501`; the app does not create placeholder records or claim a write succeeded. Operations adapters must provide atomic transactions for domain records, append-only inventory movements, idempotency keys/results, audit effects, and ordered balance locks. Do not mark an in-memory test fake as persistent or install it in production.
+
+No ORM models, application migration scripts, or MySQL schema are included. Those depend on the Database team's approved schema. Until the operational adapter is implemented and installed, APIs that need persistent catalog, inventory, sales, or return data correctly return `501` after authentication, permission, and request validation.
+
+## API contract and Postman
+
+See the repository-level [API_CONTRACT.md](../API_CONTRACT.md) for request and response shapes, permissions, scope rules, and status codes. Import `postman/BranchWise-Backend.postman_collection.json` with `postman/BranchWise-Local.postman_environment.json`. Log in before protected requests; the login request captures the readable CSRF cookie for subsequent writes. Set the sample IDs and `Idempotency-Key` to records/keys from the target test environment.
+
+The Postman collection exercises the route shapes; it does not provide database fixtures and a `501` response means persistence is not installed.
+
 ## Tests and migrations
 
 Run the backend suite from this directory:

@@ -60,9 +60,10 @@ def test_api_does_not_enable_cors_for_an_untrusted_origin():
     assert "Access-Control-Allow-Credentials" not in response.headers
 
 
-def test_unknown_input_key_that_looks_like_a_secret_is_not_reflected():
+def test_unknown_input_key_that_looks_like_a_secret_is_not_reflected(owner_client):
     private_key = "csrf-token-private-value"
-    response = create_app().test_client().post(
+    _, client = owner_client
+    response = client.post(
         "/api/branches", json={"name": "Main", private_key: "ignored"}
     )
 
@@ -298,22 +299,23 @@ def test_environment_configured_production_without_adapters_denies_login(monkeyp
         ),
     ],
 )
-def test_json_routes_reject_non_allowlisted_fields(method, path, payload, field):
-    response = getattr(create_app().test_client(), method)(path, json=payload)
+def test_json_routes_reject_non_allowlisted_fields(method, path, payload, field, owner_client):
+    _, client = owner_client
+    response = getattr(client, method)(path, json=payload)
 
     assert response.status_code == 400
     assert "body" in response.get_json()["errors"]
     assert field not in response.get_data(as_text=True)
 
 
-def test_valid_placeholder_routes_keep_existing_status_and_payloads():
-    client = create_app().test_client()
+def test_valid_placeholder_routes_keep_existing_status_and_payloads(owner_client):
+    _, client = owner_client
     valid_login = {"email": "owner@example.com", "password": "valid-password"}
     responses = [
         client.get("/api/health"),
         client.post("/api/auth/login", json=valid_login),
-        client.post("/api/auth/logout"),
         client.post("/api/branches", json={"name": "Main"}),
+        client.post("/api/auth/logout"),
     ]
 
     assert responses[0].status_code == 200
@@ -323,7 +325,8 @@ def test_valid_placeholder_routes_keep_existing_status_and_payloads():
         "message": "Database authentication is not implemented yet."
     }
     assert responses[2].status_code == 501
-    assert responses[3].status_code == 501
+    assert responses[3].status_code == 200
+    assert responses[3].get_json() == {"message": "Logout successful."}
 
     app = create_app()
     assert "branchwise.rate_limiter" not in app.extensions

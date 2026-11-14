@@ -1,143 +1,244 @@
-from flask import Blueprint
+"""Owner-only branch management APIs."""
 
-from response_helpers import error_response, json_response
-from request_validation import (
-    parse_positive_integer_id,
-    read_json_object,
-    validate_allowed_fields,
+from flask import Blueprint, current_app, g
+
+from isolation_rules import can_access_resource
+from permissions import BRANCHES_MANAGE, ResourceScope
+from repository_contracts import (
+    BRANCH_REPOSITORY_EXTENSION,
+    BranchCreateData,
+    BranchRecord,
+    BranchUpdateData,
+    RepositoryAuthorizationError,
+    RepositoryConflictError,
+    RepositoryError,
+    RepositoryNotFoundError,
 )
+from request_validation import parse_positive_integer_id, read_json_object, validate_allowed_fields
+from response_helpers import error_response, json_response
+from session_auth import require_authenticated_session
 
 
 branches_bp = Blueprint("branches", __name__, url_prefix="/api/branches")
 
-OPTIONAL_STRING_FIELDS = ("address", "phone", "notes")
-EDITABLE_FIELDS = ("name", *OPTIONAL_STRING_FIELDS)
+_OPTIONAL_STRING_FIELDS = ("address", "phone", "notes")
+_EDITABLE_FIELDS = ("name", *_OPTIONAL_STRING_FIELDS)
 
 
-def _branches_not_ready(action):
-    return json_response(
-        {
-            "message": (
-                f"Input is valid, but branch {action} is unavailable until Owner "
-                "authentication and database integration are implemented."
-            )
-        },
-        status_code=501,
+def _owner_allowed(actor):
+    principal = actor.principal
+    return can_access_resource(
+        principal,
+        BRANCHES_MANAGE,
+        ResourceScope(principal.business_id, None),
     )
 
 
-@branches_bp.get("")
-def list_branches():
-    """List the authenticated Owner's branches once auth and DB are ready."""
-    # When implemented, load branches using the business_id from the verified
-    # Owner principal. Never accept a business_id from the request.
-    return _branches_not_ready("listing")
+def _repository():
+    return current_app.extensions.get(BRANCH_REPOSITORY_EXTENSION)
 
 
-@branches_bp.get("/<branch_id>")
-def get_branch(branch_id):
-    """View one branch after validating its path ID."""
-    if parse_positive_integer_id(branch_id) is None:
+def _failure(error):
+    if isinstance(error, RepositoryAuthorizationError):
+        return error_response("Permission denied.", status_code=403)
+    if isinstance(error, RepositoryNotFoundError):
+        return error_response("Resource not found.", status_code=404)
+    if isinstance(error, RepositoryConflictError):
         return error_response(
-            errors={"branch_id": "Must be a positive integer."}, status_code=400
+            "The request conflicts with the current resource state.", status_code=409
         )
-
-    # Load this branch within the authenticated Owner's business so another
-    # business's branch cannot be viewed.
-    return _branches_not_ready("details")
+    return error_response("The branch operation could not be completed.", status_code=500)
 
 
-@branches_bp.patch("/<branch_id>/deactivate")
-def deactivate_branch(branch_id):
-    """Validate a branch deactivation request until auth and DB are ready."""
-    if parse_positive_integer_id(branch_id) is None:
-        return error_response(
-            errors={"branch_id": "Must be a positive integer."}, status_code=400
-        )
-
-    # When implemented, require an authenticated Owner, load the branch within
-    # that Owner's business, and set is_active to false. Keep its historical
-    # sales, purchases, and inventory records; reject new sales and stock
-    # transfers for inactive branches.
-    return _branches_not_ready("deactivation")
+def _branch_json(branch):
+    return {
+        "branch_id": branch.branch_id,
+        "business_id": branch.business_id,
+        "name": branch.name,
+        "address": branch.address,
+        "phone": branch.phone,
+        "notes": branch.notes,
+        "is_active": branch.is_active,
+    }
 
 
-@branches_bp.patch("/<branch_id>")
-def update_branch(branch_id):
-    """Validate editable branch fields until auth and database support exist."""
-    errors = {}
-    if parse_positive_integer_id(branch_id) is None:
-        errors["branch_id"] = "Must be a positive integer."
+def _branch_in_scope(branch, actor, *, branch_id=None):
+    if type(branch) is not BranchRecord:
+        raise RepositoryError("The repository returned invalid branch data.")
+    if (
+        branch.business_id != actor.principal.business_id
+        or (branch_id is not None and branch.branch_id != branch_id)
+    ):
+        raise RepositoryNotFoundError("Branch is outside the actor's business.")
+    return branch
 
+
+def _branch_body(*, partial):
     data, json_error = read_json_object()
     if json_error:
-        if errors:
-            errors["body"] = json_error
-            return error_response(errors=errors, status_code=400)
-        return error_response(json_error, status_code=400)
-
-    if not data:
-        errors["body"] = "Provide at least one field to update."
-
-    errors.update(
-        validate_allowed_fields(
-            data, EDITABLE_FIELDS, message="This field cannot be updated."
-        )
-    )
-
-    if "name" in data:
-        if not isinstance(data["name"], str):
-            errors["name"] = "Must be a string."
-        elif not data["name"].strip():
-            errors["name"] = "Branch name cannot be empty."
-
-    for field in OPTIONAL_STRING_FIELDS:
-        if field in data and not isinstance(data[field], str):
-            errors[field] = "Must be a string."
-
-    if errors:
-        return error_response(errors=errors, status_code=400)
-
-    # When the DB is added, update by branch_id AND the verified Owner's
-    # business_id, and check name uniqueness within that same business.
-    return _branches_not_ready("updates")
-
-
-@branches_bp.post("")
-def create_branch():
-    """Validate branch data until Owner authentication and database support exist."""
-    data, json_error = read_json_object()
-    if json_error:
-        return error_response(json_error, status_code=400)
-
-    errors = {}
-    errors.update(
-        validate_allowed_fields(data, ("name", *OPTIONAL_STRING_FIELDS))
-    )
-
+        return None, error_response(json_error, status_code=400)
+    fields = _EDITABLE_FIELDS
+    errors = validate_allowed_fields(data, fields)
+    if partial and not data:
+        errors["body"] = "Provide at least one branch field to update."
     if "name" not in data:
-        errors["name"] = "This field is required."
+        if not partial:
+            errors["name"] = "This field is required."
     elif not isinstance(data["name"], str):
         errors["name"] = "Must be a string."
     elif not data["name"].strip():
-        errors["name"] = "This field is required."
-
-    for field in OPTIONAL_STRING_FIELDS:
+        errors["name"] = "Branch name cannot be empty."
+    for field in _OPTIONAL_STRING_FIELDS:
         if field in data and not isinstance(data[field], str):
             errors[field] = "Must be a string."
-
     if errors:
-        return error_response(errors=errors, status_code=400)
+        return None, error_response(errors=errors, status_code=400)
+    normalized = dict(data)
+    for field, value in normalized.items():
+        normalized[field] = value.strip()
+    return normalized, None
 
-    # Once implemented, require an authenticated Owner and use that Owner's
-    # trusted business_id. The database must reject duplicate names in that
-    # business before creating the branch.
+
+@branches_bp.get("")
+@require_authenticated_session
+def list_branches():
+    actor = g.authenticated_session
+    if not _owner_allowed(actor):
+        return error_response("Permission denied.", status_code=403)
+    repository = _repository()
+    if repository is None:
+        return error_response("Branch persistence is not available.", status_code=501)
+    try:
+        branches = repository.list_branches(actor=actor)
+        if type(branches) not in (tuple, list):
+            raise RepositoryError("The repository returned invalid branches.")
+        rows = [_branch_in_scope(branch, actor) for branch in branches]
+    except RepositoryError as error:
+        return _failure(error)
+    return json_response({"data": [_branch_json(branch) for branch in rows]})
+
+
+@branches_bp.post("")
+@require_authenticated_session
+def create_branch():
+    actor = g.authenticated_session
+    if not _owner_allowed(actor):
+        return error_response("Permission denied.", status_code=403)
+    data, body_error = _branch_body(partial=False)
+    if body_error:
+        return body_error
+    repository = _repository()
+    if repository is None:
+        return error_response("Branch persistence is not available.", status_code=501)
+    try:
+        created = _branch_in_scope(
+            repository.create_branch_atomic(
+                actor=actor,
+                data=BranchCreateData(
+                    name=data["name"],
+                    address=data.get("address"),
+                    phone=data.get("phone"),
+                    notes=data.get("notes"),
+                ),
+            ),
+            actor,
+        )
+    except ValueError as error:
+        return error_response(errors={"body": str(error)}, status_code=400)
+    except RepositoryError as error:
+        return _failure(error)
     return json_response(
-        {
-            "message": (
-                "Input is valid, but branch creation is unavailable until Owner "
-                "authentication and database integration are implemented."
-            )
-        },
-        status_code=501,
+        {"data": _branch_json(created), "message": "Branch created."},
+        status_code=201,
     )
+
+
+@branches_bp.get("/<branch_id>")
+@require_authenticated_session
+def get_branch(branch_id):
+    actor = g.authenticated_session
+    numeric_id = parse_positive_integer_id(branch_id)
+    if numeric_id is None:
+        return error_response(
+            errors={"branch_id": "Must be a positive integer."}, status_code=400
+        )
+    if not _owner_allowed(actor):
+        return error_response("Permission denied.", status_code=403)
+    repository = _repository()
+    if repository is None:
+        return error_response("Branch persistence is not available.", status_code=501)
+    try:
+        branch = _branch_in_scope(
+            repository.get_branch(actor=actor, branch_id=numeric_id),
+            actor,
+            branch_id=numeric_id,
+        )
+    except RepositoryError as error:
+        return _failure(error)
+    return json_response({"data": _branch_json(branch)})
+
+
+@branches_bp.patch("/<branch_id>")
+@require_authenticated_session
+def update_branch(branch_id):
+    actor = g.authenticated_session
+    numeric_id = parse_positive_integer_id(branch_id)
+    if numeric_id is None:
+        return error_response(
+            errors={"branch_id": "Must be a positive integer."}, status_code=400
+        )
+    if not _owner_allowed(actor):
+        return error_response("Permission denied.", status_code=403)
+    data, body_error = _branch_body(partial=True)
+    if body_error:
+        return body_error
+    repository = _repository()
+    if repository is None:
+        return error_response("Branch persistence is not available.", status_code=501)
+    try:
+        updated = _branch_in_scope(
+            repository.update_branch_atomic(
+                actor=actor,
+                branch_id=numeric_id,
+                data=BranchUpdateData(data),
+            ),
+            actor,
+            branch_id=numeric_id,
+        )
+    except ValueError as error:
+        return error_response(errors={"body": str(error)}, status_code=400)
+    except RepositoryError as error:
+        return _failure(error)
+    return json_response(
+        {"data": _branch_json(updated), "message": "Branch updated."}
+    )
+
+
+@branches_bp.patch("/<branch_id>/deactivate")
+@require_authenticated_session
+def deactivate_branch(branch_id):
+    actor = g.authenticated_session
+    numeric_id = parse_positive_integer_id(branch_id)
+    if numeric_id is None:
+        return error_response(
+            errors={"branch_id": "Must be a positive integer."}, status_code=400
+        )
+    if not _owner_allowed(actor):
+        return error_response("Permission denied.", status_code=403)
+    repository = _repository()
+    if repository is None:
+        return error_response("Branch persistence is not available.", status_code=501)
+    try:
+        branch = _branch_in_scope(
+            repository.deactivate_branch_atomic(actor=actor, branch_id=numeric_id),
+            actor,
+            branch_id=numeric_id,
+        )
+    except RepositoryError as error:
+        return _failure(error)
+    return json_response(
+        {"data": _branch_json(branch), "message": "Branch deactivated."}
+    )
+
+
+__all__ = ["branches_bp"]

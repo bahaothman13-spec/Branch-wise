@@ -3,15 +3,20 @@
 import pytest
 
 from app import create_app
+from conftest import make_owner_client
 from permissions import Role
 from repository_contracts import (
     BRANCH_REPOSITORY_EXTENSION,
+    BUSINESS_SETTINGS_REPOSITORY_EXTENSION,
     USER_REPOSITORY_EXTENSION,
+    AccountProfileUpdateData,
     BranchCreateData,
     BranchUpdateData,
+    BusinessSettingsUpdateData,
     UserCreateData,
     UserRecord,
     install_branch_repository,
+    install_business_settings_repository,
     install_user_repository,
 )
 
@@ -44,6 +49,9 @@ class FakeUserRepository:
     def get_own_account(self, **_kwargs):
         raise AssertionError("The unimplemented route must not call the fake.")
 
+    def update_own_profile_atomic(self, **_kwargs):
+        raise AssertionError("The unimplemented route must not call the fake.")
+
     def create_user_atomic(self, **_kwargs):
         raise AssertionError("The unimplemented route must not call the fake.")
 
@@ -54,6 +62,14 @@ class FakeUserRepository:
         raise AssertionError("The unimplemented route must not call the fake.")
 
     def change_own_password_atomic(self, **_kwargs):
+        raise AssertionError("The unimplemented route must not call the fake.")
+
+
+class FakeBusinessSettingsRepository:
+    def get_own_business_settings(self, **_kwargs):
+        raise AssertionError("The unimplemented route must not call the fake.")
+
+    def update_own_business_settings_atomic(self, **_kwargs):
         raise AssertionError("The unimplemented route must not call the fake.")
 
 
@@ -122,33 +138,69 @@ def test_user_record_exposes_access_version_but_never_password_data():
     assert not hasattr(user, "password_hash")
 
 
-def test_app_installs_no_repository_by_default_and_routes_keep_501():
+def test_settings_repository_data_is_allowlisted_immutable_and_has_no_tenant_id():
+    profile = AccountProfileUpdateData(
+        {"name": "Owner", "email": "owner@example.test"}
+    )
+    business = BusinessSettingsUpdateData(
+        {"business_name": "Market", "email": "contact@example.test"}
+    )
+
+    assert profile.changes == {"name": "Owner", "email": "owner@example.test"}
+    assert business.changes == {
+        "business_name": "Market",
+        "email": "contact@example.test",
+    }
+    assert not hasattr(profile, "user_id")
+    assert not hasattr(business, "business_id")
+    with pytest.raises(TypeError):
+        profile.changes["name"] = "Changed"
+    with pytest.raises(TypeError):
+        business.changes["email"] = "changed@example.test"
+    with pytest.raises(ValueError):
+        AccountProfileUpdateData({"role": "Owner"})
+    with pytest.raises(ValueError):
+        BusinessSettingsUpdateData({"business_id": 9})
+
+
+def test_app_installs_no_repository_by_default_and_authorized_route_returns_501():
     app = make_app()
     assert BRANCH_REPOSITORY_EXTENSION not in app.extensions
     assert USER_REPOSITORY_EXTENSION not in app.extensions
+    assert BUSINESS_SETTINGS_REPOSITORY_EXTENSION not in app.extensions
 
-    client = app.test_client()
+    client = make_owner_client(app)
     response = client.post("/api/branches", json={"name": "Downtown"})
     assert response.status_code == 501
 
 
-def test_repository_injection_is_explicit_and_does_not_activate_unfinished_routes():
+def test_repository_injection_does_not_bypass_authentication():
     app = make_app()
     branch_repository = FakeBranchRepository()
     user_repository = FakeUserRepository()
+    business_repository = FakeBusinessSettingsRepository()
 
     assert install_branch_repository(app, branch_repository) is branch_repository
     assert install_user_repository(app, user_repository) is user_repository
+    assert (
+        install_business_settings_repository(app, business_repository)
+        is business_repository
+    )
     assert app.extensions[BRANCH_REPOSITORY_EXTENSION] is branch_repository
     assert app.extensions[USER_REPOSITORY_EXTENSION] is user_repository
+    assert app.extensions[BUSINESS_SETTINGS_REPOSITORY_EXTENSION] is business_repository
 
     response = app.test_client().post("/api/branches", json={"name": "Downtown"})
-    assert response.status_code == 501
+    assert response.status_code == 401
 
 
 @pytest.mark.parametrize(
     "installer",
-    [install_branch_repository, install_user_repository],
+    [
+        install_branch_repository,
+        install_user_repository,
+        install_business_settings_repository,
+    ],
 )
 def test_installers_reject_incomplete_repository_objects(installer):
     with pytest.raises(TypeError):
@@ -160,6 +212,7 @@ def test_installers_reject_incomplete_repository_objects(installer):
     [
         (install_branch_repository, FakeBranchRepository()),
         (install_user_repository, FakeUserRepository()),
+        (install_business_settings_repository, FakeBusinessSettingsRepository()),
     ],
 )
 def test_production_installers_reject_test_fakes(installer, fake):
