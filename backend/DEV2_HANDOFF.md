@@ -2,10 +2,10 @@
 
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
-**Documentation snapshot:** 2026-11-09
-**Last reported commit:** `29d357c` (successfully pushed to GitHub)
-**Last user-confirmed full-suite run:** **1,802 passed, 0 failed**
-**Last user-reported Git status:** `## backend-dev2...origin/backend-dev2` (clean and aligned with its local remote-tracking ref)
+**Documentation snapshot:** 2026-11-15 (verified against the current checkout)
+**Last confirmed pushed commit:** `691d51f` (2026-11-10; `backend-dev2` and `origin/backend-dev2` currently point to this commit)
+**Latest verified full backend suite:** **1,802 passed, 0 failed**
+**Worktree at verification:** `backend-dev2` is aligned with `origin/backend-dev2`; an unrelated untracked `.vscode/` directory is present and was not changed.
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 17 of the 21 assigned main tasks**. Those **17 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. The remaining four main tasks, BE-34–BE-37, are deferred pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
 >
@@ -39,7 +39,19 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | **BE-49** Business & Branch Comparison Reports | Phase 1: same-business branch sales-summary preparation | [`branch_comparison_report.py`](branch_comparison_report.py) | [`test_branch_comparison_report.py`](tests/test_branch_comparison_report.py) | PARTIAL |
 | **BE-50** Report Filtering & Export APIs | Phase 1: safe in-memory CSV; **Phase 2: exact `Decimal` CSV support** | [`report_export.py`](report_export.py) | [`test_report_export.py`](tests/test_report_export.py) | PARTIAL |
 
-**Shared work:** **BE-53** unit testing across these modules, and **BE-59** this handoff/documentation. Other integration, security, and deployment work is not completed merely by documenting or testing pure helpers.
+**Shared work status:** See the status table below. Implemented unit tests and isolated provisional-route checks do not constitute production authentication, persistence, transaction safety, or deployment readiness.
+
+| Task | Status | Implemented/tested work | Still required / dependency |
+| --- | --- | --- | --- |
+| **BE-51** Secure API routes using approved authentication | BLOCKED — not integrated | Provisional routes validate request structure; they reject client-supplied authorization metadata and remain unregistered in the main app. | Developer 1 must provide the approved trusted authentication/authorization interface. Then integrate and test access-control behavior; do not invent identity or permissions. |
+| **BE-52** Transaction and idempotency integration contracts | BLOCKED — contracts not established | Existing helpers and route tests do not perform persistence or inventory mutations. | Agree repository/transaction ownership and durable idempotency semantics with Developer 1/database owner and obtain approved business rules before implementing. |
+| **BE-53** Unit tests for implementations | IMPLEMENTED for current provisional work; ongoing | The current backend suite passes **1,802 tests**. Tests cover pure helpers, synthetic-data pipeline/report consistency, and provisional-route boundaries. | Add focused tests as approved integrations are implemented. Existing tests do not prove live data, authentication, authorization, concurrency, or transaction correctness. |
+| **BE-54** API integration tests | PARTIAL — provisional only | Seven tests in [`test_provisional_routes_integration.py`](tests/test_provisional_routes_integration.py) verify Blueprint coexistence, expected HTTP 501 responses, main-app non-registration, and no known database/network access. | Real API/repository integration tests require approved APIs and Developer 1's auth/database interfaces; later cover authorization, persistence, transactions, retries, and real data flow. |
+| **BE-57** Postman Collection | NOT IMPLEMENTED | No collection is present in this backend checkout. | Prepare after the team approves stable, functional request/response and authentication contracts; documenting provisional 501 stubs is not an integration deliverable. |
+| **BE-58** Review and fix backend bugs in owned files | ONGOING | The current suite passes; this handoff review did not identify a specific owned-code defect to fix. | Continue review and targeted regression testing as changes are made. Passing tests do not prove absence of bugs. |
+| **BE-59** Backend documentation and handoff | IN PROGRESS | This handoff records provisional implementation, test history, and integration/security boundaries. | Keep status and metadata current; do not describe provisional helpers or tests as production-complete. |
+
+These statuses do not change the completion boundary: all 17 implemented-core-task slices remain **PARTIAL**, and BE-34–BE-37 remain **DEFERRED / NOT IMPLEMENTED**. No production readiness is claimed.
 
 ## 2. Suppliers, purchase orders, receiving and history (BE-28–BE-31)
 
