@@ -468,6 +468,18 @@ The test does **not** verify real database access, authorization, or source comp
 
 The test does **not** establish real inventory completeness, source authenticity, authentication, or authorization. It does not change task PARTIAL statuses or Developer 1's ownership boundaries. **Commit:** `29d357c` on `backend-dev2`; **GitHub push:** successful. **Full backend suite at that point:** **1,802 passed, 0 failed**.
 
+### BE-58 - Bug Fixing: confirmed BE-40 zero-demand forecast defect
+
+A focused review confirmed a BE-40 defect: a zero-demand forecast with `forecast_days=10**400` raised `ValueError`. Fix commit `c290725` updated `backend/demand_forecast.py` to handle a zero daily average without converting an extremely large forecast period to float. That forecast now returns `0.0`.
+
+Two regression tests were added to `backend/tests/test_demand_forecast.py`. **Reported targeted tests: 113 passed. Reported full backend suite: 2,233 passed.** These results were supplied by the user and were not rerun for this documentation-only update.
+
+This was a **focused review, not an exhaustive audit of BE-28 through BE-50**. BE-58 remains ONGOING. **BE-40 remains PARTIAL because real-data API integration remains unfinished.**
+
+### BE-59 - Documentation: BE-40 fix record
+
+This update records the confirmed BE-40 defect, fix commit `c290725` (latest pushed commit reported by the user on `backend-dev2`), two regression tests, and the reported **113 targeted / 2,233 full backend tests passed**. It supplements the earlier review and test history above; earlier counts and review observations describe their respective snapshots. BE-59 remains IN PROGRESS, and all existing task statuses and integration boundaries remain unchanged.
+
 ## 9. Collaboration and next steps
 
 1. Share this handoff with the team and confirm task boundaries; **do not merge/cherry-pick Developer 1's transfer helpers without an ownership/contract discussion**.
