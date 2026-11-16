@@ -2,12 +2,12 @@
 
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
-**Documentation snapshot:** 2026-11-16 (BE-34 update; test results reported by the user)
-**Last confirmed pushed commit:** `197e802` (`backend-dev2`; latest pushed commit reported by the user)
-**Latest reported full backend suite:** **1,889 passed**
+**Documentation snapshot:** 2026-11-16 (BE-35 update; test results reported by the user)
+**Last confirmed pushed commit:** `b04a945` (`backend-dev2`; latest pushed commit reported by the user)
+**Latest reported full backend suite:** **1,997 passed**
 **Worktree at verification:** `backend-dev2` is aligned with `origin/backend-dev2`; an unrelated untracked `.vscode/` directory is present and was not changed.
 
-> **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 18 of the 21 assigned main tasks**. Those **18 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. BE-34 includes structural request validation only. The remaining three main tasks, BE-35 through BE-37, are NOT IMPLEMENTED pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
+> **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for 19 of the 21 assigned main tasks**. Those **19 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. BE-34 and BE-35 include structural validation only. The remaining two main tasks, BE-36 and BE-37, are NOT IMPLEMENTED pending transfer-rule/team decisions. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
 >
 > This handoff describes work reported and tested during development; it is not a new approval of any provisional API/schema/business rule. Verify repository content and rerun tests after integration or code changes.
 
@@ -22,7 +22,7 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | **BE-30** Purchase Receiving | Phase 1: receiving-input validation; Phase 2: provisional Purchase Receiving API | [`purchase_receiving_validation.py`](purchase_receiving_validation.py), [`purchase_receiving_routes.py`](purchase_receiving_routes.py) | [`test_purchase_receiving_validation.py`](tests/test_purchase_receiving_validation.py), [`test_purchase_receiving_routes.py`](tests/test_purchase_receiving_routes.py) | PARTIAL |
 | **BE-31** Purchase History & Supplier Records APIs | Phase 1: supplier-filterable purchase-history preparation | [`purchase_history.py`](purchase_history.py) | [`test_purchase_history.py`](tests/test_purchase_history.py) | PARTIAL |
 | **BE-34** Stock Transfer Request APIs | Phase 1: structural request validation | [`transfer_request_validation.py`](transfer_request_validation.py) | [`test_transfer_request_validation.py`](tests/test_transfer_request_validation.py) | PARTIAL |
-| **BE-35** Transfer Approval & Dispatch Processing | No Dev2 implementation | — | — | NOT IMPLEMENTED |
+| **BE-35** Transfer Approval & Dispatch Processing | Phase 1: approval/rejection structural validation; dispatch integration blocked | [`transfer_decision_validation.py`](transfer_decision_validation.py) | [`test_transfer_decision_validation.py`](tests/test_transfer_decision_validation.py) | PARTIAL |
 | **BE-36** Transfer Receiving & Discrepancy Handling | No Dev2 implementation | — | — | NOT IMPLEMENTED |
 | **BE-37** Transfer Cancellation & Idempotency Rules | No Dev2 implementation | — | — | NOT IMPLEMENTED |
 | **BE-38** AI Service Integration Layer | Phases 1–3: configuration, generic service/client boundary, Gemini adapter and mocked tests | [`ai_config.py`](ai_config.py), [`ai_client.py`](ai_client.py), [`ai_service.py`](ai_service.py), [`gemini_provider.py`](gemini_provider.py) | `tests/test_ai_*.py`, [`test_gemini_provider.py`](tests/test_gemini_provider.py) | PARTIAL |
@@ -45,13 +45,13 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | --- | --- | --- | --- |
 | **BE-51** Secure API routes using approved authentication | BLOCKED — not integrated | Provisional routes validate request structure; they reject client-supplied authorization metadata and remain unregistered in the main app. | Developer 1 must provide the approved trusted authentication/authorization interface. Then integrate and test access-control behavior; do not invent identity or permissions. |
 | **BE-52** Transaction and idempotency integration contracts | BLOCKED — contracts not established | Existing helpers and route tests do not perform persistence or inventory mutations. | Agree repository/transaction ownership and durable idempotency semantics with Developer 1/database owner and obtain approved business rules before implementing. |
-| **BE-53** Unit tests for implementations | IMPLEMENTED for current provisional work; ongoing | The latest reported backend suite passes **1,889 tests**. Tests cover pure helpers, synthetic-data pipeline/report consistency, and provisional-route boundaries. | Add focused tests as approved integrations are implemented. Existing tests do not prove live data, authentication, authorization, concurrency, or transaction correctness. |
+| **BE-53** Unit tests for implementations | IMPLEMENTED for current provisional work; ongoing | The latest reported backend suite passes **1,997 tests**. Tests cover pure helpers, synthetic-data pipeline/report consistency, and provisional-route boundaries. | Add focused tests as approved integrations are implemented. Existing tests do not prove live data, authentication, authorization, concurrency, or transaction correctness. |
 | **BE-54** API integration tests | PARTIAL — provisional only | Seven tests in [`test_provisional_routes_integration.py`](tests/test_provisional_routes_integration.py) verify Blueprint coexistence, expected HTTP 501 responses, main-app non-registration, and no known database/network access. | Real API/repository integration tests require approved APIs and Developer 1's auth/database interfaces; later cover authorization, persistence, transactions, retries, and real data flow. |
 | **BE-57** Postman Collection | NOT IMPLEMENTED | No collection is present in this backend checkout. | Prepare after the team approves stable, functional request/response and authentication contracts; documenting provisional 501 stubs is not an integration deliverable. |
 | **BE-58** Review and fix backend bugs in owned files | ONGOING | The current suite passes; this handoff review did not identify a specific owned-code defect to fix. | Continue review and targeted regression testing as changes are made. Passing tests do not prove absence of bugs. |
 | **BE-59** Backend documentation and handoff | IN PROGRESS | This handoff records provisional implementation, test history, and integration/security boundaries. | Keep status and metadata current; do not describe provisional helpers or tests as production-complete. |
 
-These statuses do not change the completion boundary: all 18 implemented-core-task slices, including BE-34, remain **PARTIAL**, and BE-35 through BE-37 remain **NOT IMPLEMENTED**. No production readiness is claimed.
+These statuses do not change the completion boundary: all 19 implemented-core-task slices, including BE-34 and BE-35, remain **PARTIAL**, and BE-36 and BE-37 remain **NOT IMPLEMENTED**. No production readiness is claimed.
 
 ## 2. Suppliers, purchase orders, receiving and history (BE-28–BE-31)
 
@@ -349,7 +349,19 @@ Validation covers required branch IDs, distinct source/destination branches, non
 
 **Reported validation:** **87 targeted tests passed**; **1,889 full backend tests passed**. **Latest pushed commit:** `197e802` on `backend-dev2`.
 
-**Remaining blockers:** trusted permissions, authoritative stock checks, persistence, transactions, server-generated metadata, duplicate-line policy, and approved lifecycle rules. Structural validation does not establish production transfer creation or inventory safety. **BE-34 remains PARTIAL, not production-complete. BE-35 through BE-37 remain NOT IMPLEMENTED.**
+**Remaining blockers:** trusted permissions, authoritative stock checks, persistence, transactions, server-generated metadata, duplicate-line policy, and approved lifecycle rules. Structural validation does not establish production transfer creation or inventory safety. **BE-34 remains PARTIAL, not production-complete. BE-35 remains PARTIAL; BE-36 and BE-37 remain NOT IMPLEMENTED.**
+
+### BE-35 - Transfer Approval & Rejection structural validation
+
+**Created files:** `backend/transfer_decision_validation.py` and `backend/tests/test_transfer_decision_validation.py`.
+
+`validate_transfer_decision_input(data)` returns field errors using a **provisional internal input contract**, not an approved production API or persistence contract. It validates a positive built-in integer `transfer_id` (excluding booleans), accepts exact `approve` and `reject` actions, rejects all unknown fields including client-controlled actor identity, role, permissions, ownership, trusted timestamps and transfer state, and preserves input immutability. These structural checks do not establish authorization. No optional decision fields are specified by the available transfer documentation, so none are accepted; no rejection-reason requirement is invented.
+
+**Reported tests:** **108 targeted tests passed**; **1,997 full backend tests passed**. **Latest pushed implementation commit:** `b04a945` on `backend-dev2`.
+
+**Remaining blockers:** trusted transfer lookup and ownership; authentication and authorization; approved lifecycle and API contracts; persistence and transactions; server-generated metadata; dispatch and inventory integration. The validator performs no approval/rejection operation, status update, or inventory mutation, and no production route is registered by this implementation. Developer 1's lifecycle and quantity rules are not duplicated.
+
+**BE-35 remains PARTIAL. BE-34 remains PARTIAL. BE-36 and BE-37 remain NOT IMPLEMENTED.**
 
 ### Transfer integration review and outstanding decisions
 
@@ -360,7 +372,7 @@ The earlier compatibility review remains relevant. A read-only review examined t
 1. Developer 1's test allows `In Transit -> Completed` for dispatched=5, received=4, remaining discrepancy=1. BW-10 requires discrepancy handling without stock loss/duplication, but the approved completion/closure decision and discrepancy settlement contract must be confirmed from the authoritative project/database decision record (including any D-04 text).
 2. Developer 1's transition rules **disallow** `In Transit -> Cancelled`. Confirm how BW-10's post-dispatch authorized cancellation and quantity reconciliation are intended to work, including states, durable movement records and transaction ownership.
 
-BE-34 request API integration remains blocked beyond structural validation; BE-35 approval/dispatch, BE-36 receiving/discrepancies and BE-37 cancellation/idempotency remain NOT IMPLEMENTED; **no stock balance changes or transfer endpoints should be implemented without approved schema/state, authoritative stock (`branch_inventory.available_qty` in earlier project notes), atomic movement-ledger semantics, trusted permissions and duplicate protection**. The original approved D-02/D-04 decision text should be verified with the team rather than inferred from provisional helpers.
+BE-34 request API integration remains blocked beyond structural validation; BE-35 approval/rejection integration and dispatch remain blocked beyond structural validation; BE-36 receiving/discrepancies and BE-37 cancellation/idempotency remain NOT IMPLEMENTED; **no stock balance changes or transfer endpoints should be implemented without approved schema/state, authoritative stock (`branch_inventory.available_qty` in earlier project notes), atomic movement-ledger semantics, trusted permissions and duplicate protection**. The original approved D-02/D-04 decision text should be verified with the team rather than inferred from provisional helpers.
 
 ## 6. Cross-cutting integration boundaries and dependencies
 
@@ -406,7 +418,7 @@ python -m venv .venv
 git status -sb
 ```
 
-The latest reported full suite after BE-34 structural validation: **1,889 passed**; targeted BE-34 tests: **87 passed**. **Historical full suite after BE-53 Phase 5:** **1,802 passed, 0 failed**. **Historical result after BE-53 Phase 4:** **1,801 passed, 0 failed**. **Historical result after BE-48 Phase 2:** **1,800 passed, 0 failed**. **Historical result after BE-47 Phase 3:** **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
+The latest reported full suite after BE-35 structural validation: **1,997 passed**; targeted BE-35 tests: **108 passed**. **Historical full suite after BE-34 structural validation:** **1,889 passed**; targeted BE-34 tests: **87 passed**. **Historical full suite after BE-53 Phase 5:** **1,802 passed, 0 failed**. **Historical result after BE-53 Phase 4:** **1,801 passed, 0 failed**. **Historical result after BE-48 Phase 2:** **1,800 passed, 0 failed**. **Historical result after BE-47 Phase 3:** **1,799 passed, 0 failed**. **Historical result after BE-47 Phase 2:** **1,798 passed, 0 failed**. **Historical result after BE-53 Phase 2:** **1,790 passed, 0 failed**. **Historical result after BE-41 Phase 2:** **1,778 passed, 0 failed**. **Earlier historical result after BE-45 Phase 2:** **1,762 passed, 0 failed**. **Earlier historical result after BE-30 Phase 2:** **1,740 passed, 0 failed**. **Earlier historical result after BE-29 Phase 2:** **1,650 passed, 0 failed**. **Earliest recorded historical result after BE-50 Phase 2:** **1,559 passed in 4.42 seconds** on the user's local machine. Rerun the suite if any code changes. Most unit tests do **not** need live Flask, MySQL, Gemini or network connectivity. Some explicitly guard against those external operations.
 
 ### BE-53 Phase 2 — Offline Forecast-to-Replenishment Pipeline Regression Tests
 
@@ -440,4 +452,4 @@ The test does **not** establish real inventory completeness, source authenticity
 4. Implement integration tests for authorization, transactions, duplicate requests and real data flow; document real run/deploy configuration only once tested.
 5. Keep changes limited to authorized files, run tests before committing and use isolated commits on `backend-dev2`. Never `--force` push to resolve ordinary branch issues.
 
-**Documentation state:** This document updates the previous BE-59 handoff (which described only BE-28 and BE-38). It does not claim production deployment or completion of any of the 18 partial main tasks.
+**Documentation state:** This document updates the previous BE-59 handoff (which described only BE-28 and BE-38). It does not claim production deployment or completion of any of the 19 partial main tasks.
