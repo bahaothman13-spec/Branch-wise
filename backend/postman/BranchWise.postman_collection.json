@@ -1,0 +1,202 @@
+{
+  "info": {
+    "name": "BranchWise BE-57",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+    "description": "Only Health is registered. Provisional requests are guarded with pm.execution.skipRequest(); manual sending support varies by Postman version. See README.md."
+  },
+  "variable": [
+    {
+      "key": "base_url",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Registered API",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{base_url}}/api/health"
+          },
+          "response": [],
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Health is available\", function () { pm.response.to.have.status(200); pm.expect(pm.response.json()).to.eql({status: \"ok\"}); });"
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "NOT REGISTERED / NOT IMPLEMENTED",
+      "event": [
+        {
+          "listen": "prerequest",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "// Disabled by default. Remove this guard only for an isolated Blueprint test server.",
+              "pm.execution.skipRequest();"
+            ]
+          }
+        }
+      ],
+      "item": [
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Supplier - Valid structure (isolated 501)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/suppliers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"Test Supplier\",\n  \"email\": \"supplier@example.com\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Supplier - Invalid structure (isolated 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/suppliers",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"name\": \"\",\n  \"email\": \"invalid-email\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Purchase Order - Valid structure (isolated 501)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/purchase-orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplier_id\": 1,\n  \"branch_id\": 2,\n  \"items\": [\n    {\n      \"product_id\": 3,\n      \"quantity\": 5,\n      \"purchase_cost\": \"12.50\"\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Purchase Order - Invalid structure (isolated 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/purchase-orders",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"supplier_id\": true,\n  \"branch_id\": 2,\n  \"items\": [\n    {\n      \"product_id\": 3,\n      \"quantity\": 0,\n      \"purchase_cost\": 1.5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Purchase Receiving - Valid structure (isolated 501)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/purchase-receiving",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purchase_order_id\": 10,\n  \"items\": [\n    {\n      \"purchase_order_line_id\": 25,\n      \"received_quantity\": 3\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        },
+        {
+          "name": "NOT REGISTERED / NOT IMPLEMENTED - Purchase Receiving - Invalid structure (isolated 400)",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{base_url}}/api/purchase-receiving",
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"purchase_order_id\": 10,\n  \"items\": [\n    {\n      \"purchase_order_line_id\": 25,\n      \"received_quantity\": -1\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "description": "NOT REGISTERED / NOT IMPLEMENTED; main app returns 404. Isolated Blueprint: valid structure 501, invalid structure 400. No persistence or authorization."
+          },
+          "response": []
+        }
+      ]
+    }
+  ]
+}
