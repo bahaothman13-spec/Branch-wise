@@ -2,9 +2,9 @@
 
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
 **Working repository:** OUTER `Branch-wise` repository, branch `backend-dev2`
-**Documentation snapshot:** 2026-11-16 (BE-37 update; test results reported by the user)
-**Last confirmed pushed commit:** `0e9a351` (`backend-dev2`; latest pushed commit reported by the user)
-**Latest reported full backend suite:** **2,231 passed**
+**Documentation snapshot:** 2026-11-16 (BE-57 documentation update; test results reported by the user)
+**Last confirmed pushed commit:** `53d711f` (`backend-dev2`; latest pushed commit reported by the user)
+**Latest reported full backend suite:** **2,242 passed**
 **Worktree at verification:** `backend-dev2` is aligned with `origin/backend-dev2`; an unrelated untracked `.vscode/` directory is present and was not changed.
 
 > **Completion boundary:** Developer 2 has implemented and tested **independent, provisional Python components for all 21 assigned main tasks**. Those **21 tasks remain PARTIAL**; most do not yet have connected Flask routes, trusted authorization, approved MySQL record contracts, or end-to-end integration. BE-34, BE-35, BE-36, and BE-37 include structural validation only; transfer integration remains blocked pending approved contracts and policies. A passing unit suite is **not** proof of deployed APIs, real data access, or safe database transactions.
@@ -45,9 +45,9 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 | --- | --- | --- | --- |
 | **BE-51** Secure API routes using approved authentication | BLOCKED — not integrated | Provisional routes validate request structure; they reject client-supplied authorization metadata and remain unregistered in the main app. | Developer 1 must provide the approved trusted authentication/authorization interface. Then integrate and test access-control behavior; do not invent identity or permissions. |
 | **BE-52** Transaction and idempotency integration contracts | BLOCKED — contracts not established | Existing helpers and route tests do not perform persistence or inventory mutations. | Agree repository/transaction ownership and durable idempotency semantics with Developer 1/database owner and obtain approved business rules before implementing. |
-| **BE-53** Unit tests for implementations | IMPLEMENTED for current provisional work; ongoing | The latest reported backend suite passes **2,231 tests**. Tests cover pure helpers, synthetic-data pipeline/report consistency, and provisional-route boundaries. | Add focused tests as approved integrations are implemented. Existing tests do not prove live data, authentication, authorization, concurrency, or transaction correctness. |
+| **BE-53** Unit tests for implementations | IMPLEMENTED for current provisional work; ongoing | The latest reported backend suite passes **2,242 tests**. Tests cover pure helpers, synthetic-data pipeline/report consistency, and provisional-route boundaries. | Add focused tests as approved integrations are implemented. Existing tests do not prove live data, authentication, authorization, concurrency, or transaction correctness. |
 | **BE-54** API integration tests | PARTIAL — provisional only | Seven tests in [`test_provisional_routes_integration.py`](tests/test_provisional_routes_integration.py) verify Blueprint coexistence, expected HTTP 501 responses, main-app non-registration, and no known database/network access. | Real API/repository integration tests require approved APIs and Developer 1's auth/database interfaces; later cover authorization, persistence, transactions, retries, and real data flow. |
-| **BE-57** Postman Collection | NOT IMPLEMENTED | No collection is present in this backend checkout. | Prepare after the team approves stable, functional request/response and authentication contracts; documenting provisional 501 stubs is not an integration deliverable. |
+| **BE-57** Postman Collection | IMPLEMENTED - independent collection artifact | Valid, importable v2.1 collection with runnable Health, guarded provisional examples, documentation and 9 targeted tests; commit `53d711f`. | Update after approved API/authentication/database integration. Provisional requests do not establish live integration or production readiness. |
 | **BE-58** Review and fix backend bugs in owned files | ONGOING | The current suite passes; this handoff review did not identify a specific owned-code defect to fix. | Continue review and targeted regression testing as changes are made. Passing tests do not prove absence of bugs. |
 | **BE-59** Backend documentation and handoff | IN PROGRESS | This handoff records provisional implementation, test history, and integration/security boundaries. | Keep status and metadata current; do not describe provisional helpers or tests as production-complete. |
 
@@ -479,6 +479,58 @@ This was a **focused review, not an exhaustive audit of BE-28 through BE-50**. B
 ### BE-59 - Documentation: BE-40 fix record
 
 This update records the confirmed BE-40 defect, fix commit `c290725` (latest pushed commit reported by the user on `backend-dev2`), two regression tests, and the reported **113 targeted / 2,233 full backend tests passed**. It supplements the earlier review and test history above; earlier counts and review observations describe their respective snapshots. BE-59 remains IN PROGRESS, and all existing task statuses and integration boundaries remain unchanged.
+
+### BE-57 - Postman Collection (BE-59 documentation record)
+
+**Commit:** `53d711f` on `backend-dev2` (latest pushed commit reported by the user).
+Created files (repository-relative paths):
+
+- [`backend/postman/BranchWise.postman_collection.json`](postman/BranchWise.postman_collection.json)
+- [`backend/postman/README.md`](postman/README.md)
+- [`backend/tests/test_postman_collection.py`](tests/test_postman_collection.py)
+
+The Postman Collection is valid and importable as Collection v2.1. Its
+`base_url` variable defaults to `http://127.0.0.1:5000`. The registered
+`GET /api/health` request is runnable against the existing local app and
+checks HTTP 200 with `{"status": "ok"}`.
+
+Supplier (`POST /api/suppliers`), Purchase Order (`POST /api/purchase-orders`)
+and Purchase Receiving (`POST /api/purchase-receiving`) requests are in a
+separate **NOT REGISTERED / NOT IMPLEMENTED** folder. They remain unregistered
+in the main application, where these paths return HTTP 404. The inherited
+`pm.execution.skipRequest()` guard disables them by default in supported
+Postman runtimes; older clients must not be relied on to skip requests.
+
+Valid and invalid JSON examples reflect existing validators and route tests.
+Only an isolated app registering the existing Blueprints produces the
+illustrated HTTP 400/501 behavior: invalid fields return 400 with `errors`,
+while non-JSON, malformed or non-object bodies return 400 with `error`.
+Structurally valid examples return 501 with a pending-integration message.
+Purchase costs use exact decimal strings; JSON floats fail validation.
+Synthetic IDs imply no database records. The collection does not demonstrate
+live authentication, authorization, database persistence or inventory changes.
+
+Remaining gaps are documented without invented HTTP requests:
+
+| Tasks | Remaining API integration |
+| --- | --- |
+| BE-31 | Purchase history/supplier record routes, scoped repositories and response contracts |
+| BE-34-37 | Transfer request, approval/dispatch, receipt/discrepancy and cancellation routes; approved lifecycle, stock ledger, atomic transactions and durable idempotency |
+| BE-38 | Trusted AI configuration, provider integration and approved route contracts |
+| BE-39-42 | Sales history, forecast, replenishment and alternative comparison routes with authorized real inputs and approved rules |
+| BE-43-45 | Business questions, decision logs and reliability/fallback integration; scoped context, persistence and response contracts |
+| BE-46-50 | Dashboard, sales/product, inventory/purchase, branch comparison and export routes; approved definitions, complete sources, filters and export contracts |
+
+All require coordination with Developer 1 for trusted authentication,
+authorization and approved database contracts. All existing PARTIAL task
+statuses remain unchanged; BE-57 completes the independent collection artifact
+and does not establish production readiness.
+
+**Recorded verification:** valid Postman JSON and whitespace checks passed;
+**9 targeted tests passed** and **2,242 full backend tests passed**. These
+results were confirmed by the user for commit `53d711f`; tests were not rerun
+for this documentation-only update. Historical results above retain their
+original snapshot meaning. BE-59 remains IN PROGRESS.
 
 ## 9. Collaboration and next steps
 
