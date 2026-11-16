@@ -52,7 +52,9 @@ def calculate_demand_forecast(historical_quantities, forecast_days, window_days)
 
     daily_average = mean(quantities[-window_days:])
     try:
-        forecast_total = daily_average * forecast_days
+        # Zero remains representable even when the integer period cannot be
+        # converted to float for multiplication.
+        forecast_total = 0.0 if daily_average == 0 else daily_average * forecast_days
     except OverflowError:
         raise ValueError("Forecast total must fit a finite float.") from None
     if not math.isfinite(forecast_total):

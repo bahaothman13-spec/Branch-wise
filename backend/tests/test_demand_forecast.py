@@ -12,6 +12,17 @@ import pytest
 from demand_forecast import calculate_demand_forecast
 
 
+@pytest.mark.parametrize("history", [[0], [0.0, 0]])
+def test_zero_demand_accepts_large_positive_forecast_period(history):
+    days = 10 ** 400
+    assert calculate_demand_forecast(history, days, len(history)) == {
+        "daily_average": 0.0,
+        "forecast_total": 0.0,
+        "forecast_days": days,
+        "window_days": len(history),
+    }
+
+
 @pytest.fixture(autouse=True)
 def blocked_external_services(monkeypatch):
     """Detect database or network attempts even if the calculation catches them."""
