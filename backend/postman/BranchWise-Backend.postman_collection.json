@@ -1,0 +1,1164 @@
+{
+  "info": {
+    "name": "BranchWise Backend API",
+    "description": "Select BranchWise Local. Log in before authenticated requests to capture the CSRF cookie. Stateful requests send X-CSRF-Token. Operational persistence is not installed by default, so valid database-backed actions return 501 until a persistent adapter is provided; the collection does not imply fake success.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://127.0.0.1:5000",
+      "type": "string"
+    },
+    {
+      "key": "csrf_token",
+      "value": "",
+      "type": "string"
+    },
+    {
+      "key": "request_key",
+      "value": "request-001",
+      "type": "string"
+    },
+    {
+      "key": "branch_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "user_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "category_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "product_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "variant_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "request_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "sale_id",
+      "value": "1",
+      "type": "string"
+    },
+    {
+      "key": "return_id",
+      "value": "1",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Health and Authentication",
+      "item": [
+        {
+          "name": "Health",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/health",
+            "description": "Public health check."
+          }
+        },
+        {
+          "name": "Register Owner",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/register",
+            "description": "Registration needs AuthRepository; it creates no branch.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"owner_name\":\"{{owner_name}}\",\"business_name\":\"{{business_name}}\",\"email\":\"{{email}}\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Login",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/login",
+            "description": "Needs account, session, and shared rate-limit adapters.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"email\":\"{{email}}\",\"password\":\"{{password}}\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "const token = pm.cookies.get('branchwise_csrf');",
+                  "if (token) pm.environment.set('csrf_token', token);"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/auth/logout",
+            "description": "Requires a live session and CSRF.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Account, Branches, and Users",
+      "item": [
+        {
+          "name": "Get my account",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "Safe account fields."
+          }
+        },
+        {
+          "name": "Update my account",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me",
+            "description": "CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Updated Owner\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change my password",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/me/password",
+            "description": "CSRF required; old sessions are revoked after save.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"current_password\":\"{{password}}\",\"new_password\":\"replace-with-a-new-password\",\"confirm_password\":\"replace-with-a-new-password\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get business settings",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/business/settings",
+            "description": "Owner-only."
+          }
+        },
+        {
+          "name": "Update business settings",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/business/settings",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"business_name\":\"Updated Market\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List branches",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches",
+            "description": "Owner-only."
+          }
+        },
+        {
+          "name": "Create branch",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/branches",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Downtown\",\"address\":\"Main Street\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Get branch",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/branches/{{branch_id}}",
+            "description": "Owner-only."
+          }
+        },
+        {
+          "name": "Update branch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/branches/{{branch_id}}",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Downtown East\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Deactivate branch",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/branches/{{branch_id}}/deactivate",
+            "description": "Soft-deactivate; Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List staff",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Owner-only; no credential data."
+          }
+        },
+        {
+          "name": "Create staff",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users",
+            "description": "Owner-only; password is hashed server-side.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Employee\",\"email\":\"employee@example.com\",\"role\":\"Employee\",\"branch_id\":{{branch_id}},\"initial_password\":\"replace-with-a-password\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Assign staff",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{user_id}}",
+            "description": "Owner-only; invalidates prior sessions.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"role\":\"Branch Manager\",\"branch_id\":{{branch_id}}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change staff status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/users/{{user_id}}/status",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"is_active\":false}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Products, Categories, and Variants",
+      "item": [
+        {
+          "name": "List products",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products?page=1&per_page=20",
+            "description": "Business catalog."
+          }
+        },
+        {
+          "name": "Create product",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products",
+            "description": "Product and required default variant are atomic.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Green Tea\",\"product_code\":\"TEA-01\",\"category_id\":{{category_id}},\"selling_price\":\"2.500\",\"cost_price\":\"1.250\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update product",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{product_id}}",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Green Tea Premium\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change product status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/status",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"is_active\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Product overview",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/overview?movement_limit=10",
+            "description": "Stock overview; OperationsRepository required."
+          }
+        },
+        {
+          "name": "List categories",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/categories?page=1&per_page=20",
+            "description": "Business catalog."
+          }
+        },
+        {
+          "name": "Create category",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Beverages\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update category",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/{{category_id}}",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"name\":\"Cold Drinks\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change category status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/categories/{{category_id}}/status",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"is_active\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List variants",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/variants",
+            "description": "Business-scoped; no stock fields."
+          }
+        },
+        {
+          "name": "Create variant",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/variants",
+            "description": "Owner-only; business-scoped SKU uniqueness.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"sku\":\"TEA-M-RED\",\"size\":\"M\",\"color\":\"Red\",\"selling_price\":\"2.750\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Update variant",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/variants/{{variant_id}}",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"color\":\"Blue\",\"selling_price\":\"2.900\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Change variant status",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/products/{{product_id}}/variants/{{variant_id}}/status",
+            "description": "Owner-only; CSRF required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"is_active\":true}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "Inventory, Sales, and Product Requests",
+      "item": [
+        {
+          "name": "Adjust stock",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{request_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/branches/{{branch_id}}/inventory/adjustments",
+            "description": "Set Idempotency-Key; append-only and atomic.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"product_variant_id\":{{variant_id}},\"direction\":\"INCREASE\",\"quantity\":3,\"reason\":\"Count correction\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Submit product request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/product-requests",
+            "description": "Employee snapshot; does not update catalog.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"change_type\":\"Add Product\",\"reason\":\"Customer demand\",\"payload\":{\"name\":\"New Item\",\"product_code\":\"NEW-1\",\"category_id\":{{category_id}},\"selling_price\":\"1.000\"}}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List product requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/product-requests?status=Pending",
+            "description": "Role and branch scoped."
+          }
+        },
+        {
+          "name": "Comment on product request",
+          "request": {
+            "method": "PATCH",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/product-requests/{{request_id}}/comment",
+            "description": "Branch Manager only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"comment\":\"Please confirm size options.\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Approve product request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/product-requests/{{request_id}}/approve",
+            "description": "Owner-only; applies snapshot after revalidation.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reject product request",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/product-requests/{{request_id}}/reject",
+            "description": "Owner-only; reason required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Duplicate product.\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Create sale",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{request_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales",
+            "description": "Set Idempotency-Key; server prices only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"branch_id\":{{branch_id}},\"items\":[{\"product_id\":{{product_id}},\"product_variant_id\":{{variant_id}},\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List sales",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales?page=1&per_page=20",
+            "description": "Role-scoped history."
+          }
+        },
+        {
+          "name": "Get sale",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sales/{{sale_id}}",
+            "description": "Historical detail."
+          }
+        },
+        {
+          "name": "Request cancellation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sales/{{sale_id}}/cancellation-requests",
+            "description": "Employee-only; completed sale.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Duplicate transaction.\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Approve cancellation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sale-cancellation-requests/{{request_id}}/approve",
+            "description": "Owner/Manager; restores sold less returns.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Reject cancellation",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/sale-cancellation-requests/{{request_id}}/reject",
+            "description": "Owner/Manager; reason required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"reason\":\"Return already processed.\"}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "List cancellation requests",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/sale-cancellation-requests?status=Pending",
+            "description": "Visible request queue for the current role and branch."
+          }
+        }
+      ]
+    },
+    {
+      "name": "Returns",
+      "item": [
+        {
+          "name": "List returns",
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": "{{baseUrl}}/api/returns?status=Pending",
+            "description": "Visible returns for the current role and branch."
+          }
+        },
+        {
+          "name": "Submit linked return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{request_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/returns",
+            "description": "Set Idempotency-Key; quantity limited to sold.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"original_sale_id\":{{sale_id}},\"reason\":\"Wrong item\",\"items\":[{\"product_variant_id\":{{variant_id}},\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Submit unlinked return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              },
+              {
+                "key": "Idempotency-Key",
+                "value": "{{request_key}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/returns",
+            "description": "Set Idempotency-Key; verification required.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"branch_id\":{{branch_id}},\"reason\":\"No receipt\",\"items\":[{\"product_variant_id\":{{variant_id}},\"quantity\":1}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Verify unlinked return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/returns/{{return_id}}/verify",
+            "description": "Owner/Manager only.",
+            "body": {
+              "mode": "raw",
+              "raw": "{}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        },
+        {
+          "name": "Inspect return",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              },
+              {
+                "key": "X-CSRF-Token",
+                "value": "{{csrf_token}}"
+              }
+            ],
+            "url": "{{baseUrl}}/api/returns/{{return_id}}/inspections",
+            "description": "Only RESALABLE stock becomes available.",
+            "body": {
+              "mode": "raw",
+              "raw": "{\"items\":[{\"return_item_id\":1,\"quantity\":1,\"condition\":\"RESALABLE\"}]}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            }
+          }
+        }
+      ]
+    }
+  ]
+}

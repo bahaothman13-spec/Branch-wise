@@ -1,0 +1,36 @@
+name: Backend unit tests
+
+on:
+  push:
+    paths:
+      - "backend/**"
+      - "API_CONTRACT.md"
+      - ".github/workflows/backend-unit-tests.yml"
+  pull_request:
+    paths:
+      - "backend/**"
+      - "API_CONTRACT.md"
+      - ".github/workflows/backend-unit-tests.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v7
+        with:
+          python-version: "3.12"
+
+      - name: Install backend dependencies
+        run: python -m pip install -r requirements.txt
+        working-directory: backend
+
+      - name: Run unit tests
+        run: python -m pytest -q
+        working-directory: backend

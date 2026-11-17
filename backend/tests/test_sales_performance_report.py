@@ -246,6 +246,9 @@ def test_exact_sums_survive_small_context_large_values_and_cancellation():
         observation(sales_value=Decimal("2E-40")),
     ]
     with localcontext() as context:
+        # localcontext inherits sticky flags from earlier operations. Establish
+        # a controlled local baseline to detect flags raised by calculate().
+        context.clear_flags()
         context.prec = 2
         context.Emax, context.Emin = 2, -2
         context.traps[Inexact] = True
