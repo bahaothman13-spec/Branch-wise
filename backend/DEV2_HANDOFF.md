@@ -421,7 +421,9 @@ Historical full backend test suite after BE-28 Phase 2: 1,566 passed, 0 failed.
 
 BE-28 remains PARTIAL.
 
-### BE-28 Phase 3 — Supplier API Integration Readiness
+### BE-28 Phase 3 — Supplier API Integration Readiness (historical pre-merge audit)
+
+The dependency observations below describe the original Developer 2 workspace. They are superseded for the merged integration worktree by the current preparation-service update at the end of this document; historical notes are retained for context.
 
 **Already implemented and tested:** `supplier_validation.py` performs basic required-name, optional-string, and email-syntax checks. The isolated `supplier_bp` at `POST /api/suppliers` rejects non-JSON/non-object bodies and unknown request fields, including client-supplied `business_id`; invalid input returns HTTP 400 and structurally valid input returns HTTP 501. Seven route tests cover these provisional behaviors. The Blueprint remains unregistered in `app.py`.
 
@@ -641,3 +643,45 @@ original snapshot meaning. BE-59 remains IN PROGRESS.
 5. Keep changes limited to authorized files, run tests before committing and use isolated commits on `backend-dev2`. Never `--force` push to resolve ordinary branch issues.
 
 **Documentation state:** This document updates the previous BE-59 handoff (which described only BE-28 and BE-38). It does not claim production deployment or completion of any of the 21 partial main tasks.
+
+
+### BE-28 - Internal supplier preparation service (merged integration update)
+
+`src/branchwise/suppliers/supplier_service.py` now exposes
+`prepare_supplier_create(data, *, actor: AuthenticatedSession, scope: ResourceScope)`.
+This internal service requires a server-resolved Developer 1 session, positive
+user identity and authorized business scope. It delegates authorization to
+`require_resource_access` with `suppliers:manage`: only an Owner with the trusted
+grant can prepare creation; Branch Managers and Employees remain denied even
+if supplied that grant. Actor and scope must never originate in request fields.
+Session expiry/current-account verification stays with `SessionManager`; future
+HTTP callers must use the established session/CSRF decorator.
+
+The service reuses `validate_supplier_input` unchanged and the shared allowlist
+helper (`errors.body` convention) to reject unknown fields without reflecting
+metadata. Its frozen `SupplierPreparation` contains only a read-only `errors`
+mapping. Empty errors mean preparation passed, never persistence success. No
+normalization, duplicate policy, schema constraint or lifecycle rule was added.
+
+`tests/test_supplier_service.py` covers authorization, missing identity/grants,
+invalid or foreign business scope, role restrictions, forged request metadata,
+field validation, optional-value behavior, input immutability and blocked
+network/database operations. These are internal preparation unit tests, not
+production API integration tests.
+
+Current merged infrastructure includes `backend/db.py` SQLAlchemy/Migrate
+extensions, `session_auth.py`, `permissions.py`, `isolation_rules.py` and typed
+repository conventions. The historical statements that db.py is empty or that
+only health is exposed do not describe this merged worktree. Persistent auth,
+session and application repository adapters are not installed by default.
+
+BE-28 remains PARTIAL: production CRUD and persistence are incomplete. Supplier
+model/schema, repository and API contracts still require approval, including
+field limits, optional-value storage, uniqueness and lifecycle semantics. The
+supplier blueprint remains unregistered in the main application; its existing
+isolated provisional route and validator are unchanged. No production supplier
+endpoint, repository, ORM model or migration was added.
+
+Verification: 91 supplier service/validation/provisional-route tests passed; full
+merged backend suite: 3,416 passed (baseline 3,383 plus 33 service tests).
+The main Flask route map matches HEAD exactly: 49 rules, no supplier endpoint.
