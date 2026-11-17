@@ -6,13 +6,14 @@ Keep unregistered in the main application until trusted integration is ready.
 
 from flask import Blueprint, jsonify, request
 
-from branchwise.purchasing.purchase_order_validation import validate_purchase_order_input
+from branchwise.purchasing.purchase_order_validation import (
+    ALLOWED_FIELDS,
+    ALLOWED_ITEM_FIELDS,
+    validate_purchase_order_input,
+)
 
 
 purchase_order_bp = Blueprint("purchase_orders", __name__, url_prefix="/api")
-
-ALLOWED_FIELDS = {"supplier_id", "branch_id", "items"}
-ALLOWED_ITEM_FIELDS = {"product_id", "variant_id", "quantity", "purchase_cost"}
 
 
 @purchase_order_bp.post("/purchase-orders")

@@ -8,6 +8,11 @@ Final API fields and database rules must be agreed with the team.
 from decimal import Decimal, InvalidOperation, localcontext
 
 
+# Shared provisional input fields; these do not authorize references or prices.
+ALLOWED_FIELDS = frozenset({"supplier_id", "branch_id", "items"})
+ALLOWED_ITEM_FIELDS = frozenset({"product_id", "variant_id", "quantity", "purchase_cost"})
+
+
 def valid_id(value):
     """Accept a positive integer ID, but not a boolean."""
     return type(value) is int and value > 0

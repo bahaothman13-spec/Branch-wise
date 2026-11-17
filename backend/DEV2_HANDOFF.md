@@ -685,3 +685,58 @@ endpoint, repository, ORM model or migration was added.
 Verification: 91 supplier service/validation/provisional-route tests passed; full
 merged backend suite: 3,416 passed (baseline 3,383 plus 33 service tests).
 The main Flask route map matches HEAD exactly: 49 rules, no supplier endpoint.
+
+### BE-29 - Secure internal purchase-order input preparation (merged integration update)
+
+`src/branchwise/purchasing/purchase_order_service.py` now exposes
+`prepare_purchase_order_input(data, *, actor: AuthenticatedSession, branch_scope: ResourceScope, business_branch_count: int) -> PurchaseOrderPreparation`.
+This is an internal preparation service. The actor must be resolved by Developer
+1's SessionManager; destination scope must be established by the server, and the
+branch count must be loaded for that business. Request metadata supplies none of
+these trusted values. Session expiry/current-account checks remain with the
+session manager; future HTTP callers must also use its session/CSRF decorator.
+
+Existing `require_resource_access` and `is_branch_operation_ready` enforce the
+role matrix, trusted grants, business isolation, assigned manager branch and
+onboarding readiness. Owners require `purchases:manage`; Branch Managers require
+`purchases:manage_authorized` and their assigned destination branch. Employees
+remain denied even with forged grants. Invalid/foreign scopes, zero branches and
+a structurally valid request branch that differs from the trusted destination
+raise the shared non-disclosing PermissionError. Invalid trusted branch counts
+retain the onboarding helper's ValueError; trusted context arguments are required.
+
+The existing `validate_purchase_order_input` is reused without numerical or
+structural rule changes. Missing/malformed request IDs return its field errors.
+The provisional route's root/item allowlists now live in the validator module as
+immutable frozensets and are reused by both callers. Unknown fields, including
+forged roles, business IDs, grants, totals and statuses, are rejected without
+reflecting their values. Caller data and Decimal context remain unchanged.
+The provisional route retains its existing HTTP 400/501 behavior.
+
+The frozen `PurchaseOrderPreparation` contains only a copied, read-only errors
+mapping. Empty errors mean preliminary authorization and structural checks passed.
+Supplier, branch, product and variant existence/eligibility are not verified by
+this service; authoritative price lookups remain unresolved. No order identity,
+reference, totals, status, creation command, database writes or inventory changes
+are produced. Empty errors do not establish production persistence readiness.
+
+`tests/test_purchase_order_service.py` covers trusted sessions, Owner and Branch
+Manager permission boundaries, Employee denial, scope and onboarding failures,
+reused validation, forged metadata, Decimal context, input/result immutability
+and blocked repository, inventory, database and network operations.
+
+BE-29 remains PARTIAL. Approved supplier/branch/catalog reference lookups and
+authoritative prices are still required. PO/line models, repository and API
+contracts, transaction ownership, reference/duplicate-line rules, product/variant
+compatibility and lifecycle policies still require approval. No ORM model,
+migration, production repository or Purchase Order endpoint was added. The
+Purchase Order Blueprint remains unregistered in the main application.
+
+Verification in the isolated integration virtual environment: 214 new service
+tests passed; 408 existing purchasing, permission/isolation/onboarding, supplier
+and provisional-route regression tests passed. Full merged backend suite:
+**3,630 passed** (3,416 baseline plus 214 new tests). Tests used an explicit
+temporary directory outside the worktree for the known Windows permissions
+issue. The main Flask route map matches the pre-change snapshot exactly:
+**49 rules**, with no Purchase Order endpoint. Existing validator function ASTs
+also match HEAD exactly.
