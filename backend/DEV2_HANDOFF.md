@@ -740,3 +740,66 @@ temporary directory outside the worktree for the known Windows permissions
 issue. The main Flask route map matches the pre-change snapshot exactly:
 **49 rules**, with no Purchase Order endpoint. Existing validator function ASTs
 also match HEAD exactly.
+
+### BE-30 - Secure internal purchase-receiving input preparation (merged integration update)
+
+`src/branchwise/purchasing/purchase_receiving_service.py` now exposes
+`prepare_purchase_receiving_input(data, *, actor: AuthenticatedSession, branch_scope: ResourceScope, business_branch_count: int) -> PurchaseReceivingPreparation`.
+This internal preparation service requires a session resolved by Developer 1's
+SessionManager, a destination scope established by the server, and a branch
+count loaded for that business. Request metadata cannot supply trusted context.
+Session expiry, current-account checks and access-version validation remain
+with SessionManager; future HTTP callers must use the existing session/CSRF
+decorator.
+
+Authorization precedes detailed input validation. Existing
+`require_resource_access` and `is_branch_operation_ready` enforce the role
+matrix, trusted grants, business isolation, destination scope and onboarding.
+Owners require `purchases:manage`; Branch Managers require
+`purchases:manage_authorized` and assignment to the destination branch.
+Employees remain denied even with injected purchasing grants. Invalid or
+foreign context, branchless destinations and zero branches raise the shared
+non-disclosing PermissionError. Invalid trusted branch counts retain the
+onboarding helper's ValueError; trusted arguments are required and keyword-only.
+
+The existing `validate_purchase_receiving_input` function is reused unchanged.
+Its provisional built-in integer checks, zero-quantity acceptance and repeated
+line behavior remain structural checks only, without an approved receiving
+policy. Shared immutable root/item allowlists are reused by the service and
+provisional route. Unknown fields and forged identity, scope, status and
+transaction metadata are rejected without reflecting names or values.
+Inputs remain unchanged; errors stay deterministic.
+
+The frozen `PurchaseReceivingPreparation` contains only a copied, read-only
+errors mapping. Empty errors mean preliminary authorization and structural
+checks passed ONLY. Checking the supplied trusted destination scope does not
+verify that the submitted purchase order exists, belongs to that business or
+has that destination. The service does not verify line membership, remaining
+receivable quantities or order eligibility. It generates no receipt ID,
+timestamp, stock movement, status, persistence command or successful-receiving
+response, and makes no committed-transaction or durable-idempotency claim.
+
+`tests/test_purchase_receiving_service.py` covers role/grant and trusted-session
+boundaries, business/branch isolation, onboarding, authorization ordering,
+existing validation semantics, forged metadata, deterministic errors,
+input/result immutability and guarded database, repository, network, inventory
+and transaction boundaries.
+
+BE-30 remains PARTIAL. Approved persisted PO/line and supplier/catalog lookups,
+actual destination verification, receiving lifecycle/quantity/discrepancy/cost
+policies, durable receipt identities, classified stock movements, atomic
+receiving transactions and durable replay protection remain blocked.
+The main application still does not register the receiving blueprint. The
+isolated provisional route preserves its existing 400/501 responses.
+No model, migration, production repository or persistent receiving operation
+was added.
+
+Verification in the isolated integration virtual environment: **204 new
+receiving-service tests passed**; **897 existing regression tests passed**,
+including receiving validation/provisional routes, BE-29 preparation,
+permissions/isolation/onboarding/session/transaction/inventory foundations and
+BE-54 provisional integration. Full merged backend suite: **3,834 passed**
+(3,630 baseline plus 204 new tests), using an explicit temporary directory
+outside the worktree. The main Flask route map matches HEAD exactly:
+**49 rules**, with no receiving endpoint (404). The receiving validator function
+and provisional route handler ASTs match HEAD exactly. Whitespace checks passed.

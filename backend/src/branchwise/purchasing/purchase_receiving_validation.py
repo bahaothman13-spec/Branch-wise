@@ -18,6 +18,11 @@ are provided. Inputs stay unchanged; lines and quantities are never aggregated.
 """
 
 
+# Shared provisional fields; these do not verify records or authorize receiving.
+ALLOWED_FIELDS = frozenset({"purchase_order_id", "items"})
+ALLOWED_ITEM_FIELDS = frozenset({"purchase_order_line_id", "received_quantity"})
+
+
 def validate_purchase_receiving_input(data):
     """Return deterministic field errors for the provisional input structure."""
     if not isinstance(data, dict):
