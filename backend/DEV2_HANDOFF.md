@@ -1,26 +1,49 @@
-# Current integration checklist ? verified 2026-11-17 (BE-59)
+# BE-59: Merged backend handoff
 
-This section supersedes current-state claims in the historical handoff below. Historical paths, commits and test counts remain evidence of their original snapshots, not current instructions. Existing user edits are retained.
+Verified snapshot: 2026-11-17, worktree `BranchWise_INTEGRATION`, branch `integration/dev1-dev2`, HEAD `d399b7e` (BE-58 startup fix), following merge `92f53cd`. This section supersedes the historical handoff below; historical branch names, paths, counts and statuses describe earlier snapshots only.
 
-## Verified Git and filesystem state
+## Completion boundaries
 
-Read-only `git ls-remote origin` confirmed main `004ca0766be8d7704670e4c21509236749523832`, backend-dev1 `ca1adad4cf4f0ec7db85b3ffbc01d63935a7876b`, backend-dev2 `e600d273173170f13b189c8de9d200906930ac02`; cached origin refs agree. Current branch is `backend-dev2`, aligned with origin. No unmerged index entries exist. The tree is dirty: existing deletions of root backend modules, modified examples/tests/configuration/documentation, and untracked `backend/src/` and `backend/README.md`. These changes are not committed or implied approved by this review.
+- Completed independent implementation: Developer 2 validators, calculations, synthetic pipelines, provisional route boundaries and collection artifacts exist and are tested.
+- Completed Git integration: both developers' modules and tests are merged. BE-58 removed the unused empty `src/db.py`; `backend/db.py` is the sole SQLAlchemy/Migrate configuration.
+- Partial functional integration: Developer 1's application and registered APIs run; Developer 2 domain helpers are available but their business APIs are not connected to the application.
+- Blocked database or policy work: approved schemas, persistent adapters, durable transactions and task-specific policies remain prerequisites below.
+- Production readiness: not established. Passing tests demonstrate current contracts and deliberate missing-adapter behavior, not live persistence, safe concurrent writes or complete workflows.
 
-Current local modules live under `backend/src/branchwise/{suppliers,purchasing,transfers,ai,forecasting,replenishment,dashboard,reports}/`; app and empty database placeholder are `backend/src/app.py` and `backend/src/db.py`. Tests remain `backend/tests/`. The local app exposes health only; provisional supplier/PO/receiving Blueprints remain unregistered. Developer 1's inspected paths are Git objects at `origin/backend-dev1:backend/...`, not locally integrated files. Reconcile layout/imports deliberately during integration.
+## Layout, startup and verification
 
-Latest full backend result supplied by Baha: **2,254 passed**. It was not rerun in this documentation-only review. Earlier 2,242, 2,233 and other counts below are historical. Developer 1's readiness document separately records 1,126 passed; do not add suite counts or claim a combined result.
+`backend/src/app.py` owns the Flask factory and module-level app. Developer 1 infrastructure remains in `backend/`: `db.py`, `session_auth.py`, `auth_workflows.py`, `permissions.py`, `isolation_rules.py`, `repository_contracts.py` and `routes/`. Developer 2 packages live in `backend/src/branchwise/{suppliers,purchasing,transfers,ai,forecasting,replenishment,dashboard,reports}/`. Tests remain in `backend/tests/`; runnable synthetic demonstrations remain in `backend/examples/`.
 
-## Available Developer 1 interfaces and missing dependencies
+From the integration repository root in PowerShell:
 
-At `ca1adad`, `session_auth.py` provides `TrustedSessionUser`, `AuthenticatedSession`, `SessionStore`, `SessionManager`, `install_session_auth`, `require_authenticated_session`, and cookie helpers. `auth_workflows.py` provides `AuthRepository`/`AuthAccount`; `permissions.py` provides `Role`, `AuthenticatedPrincipal`, `ResourceScope`, `has_permission`; `isolation_rules.py` supplies scope checks. Session validity includes trusted reload and access-version invalidation; state-changing integration must retain CSRF protection. These exist remotely but are not integrated into Dev2 routes. Refer to `SESSION_AUTH_FOUNDATION.md`, `API_SECURITY_FOUNDATION.md` and `ROLE_PERMISSIONS.md` before selecting actual grants; never derive trusted identity from JSON IDs.
+```powershell
+cd backend
+..\..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m flask --app src.app run
+```
 
-`repository_contracts.py` provides BranchRepository, UserRepository, BusinessSettingsRepository, ProductRepository, CategoryVariantRepository and OperationsRepository, typed records/errors and explicit installers. Operations ports support Dev1 operations; their existence does not establish a purchase-history or forecast source contract. No default persistent adapters are installed. Dedicated supplier, purchase-order, purchase-receipt, purchase-history, forecasting/reporting and AI decision-log persistence contracts are still needed; agree their ownership and signatures before coding them.
+No PYTHONPATH, pytest configuration or IDE setting is required. For route inspection replace `run` with `routes`. Importing `src.app` constructs the app and loads `backend/.env`; use valid environment settings. Without database settings, development uses memory-only SQLite; production rejects that fallback. No schema or persistent adapter is created by startup.
 
-Developer 1's `db.py` supplies Flask-SQLAlchemy/Flask-Migrate foundation, unlike the local empty placeholder. `transaction_safety_rules.py` supplies canonical payload hashing, idempotency requests/decisions and ordered inventory balance keys; `inventory_movement_rules.py` supplies movement rules. `TRANSACTION_SAFETY_CONTRACT.md` describes durable atomic requirements. These are rules/contracts, not a working transaction repository, MySQL adapter, lock implementation or durable replay store. Approved DDL/migrations, constraints, adapters and real concurrency tests remain missing. Consult `INTEGRATION_READINESS.md` and `BACKEND_DATABASE_DECISIONS.md`; database coordination must resolve password hashing, CSRF persistence and schema-version discrepancies documented there.
+From the integration repository root, run the complete suite with the isolated environment and repository configuration:
 
-## Per-task remaining work
+```powershell
+..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m pytest -c backend/pytest.ini backend -q --basetemp backend/.be59-tmp
+```
 
-Implemented/tested below means existing provisional helpers and recorded tests, not a fresh run or production completion. All assigned BE-28?50 tasks remain PARTIAL. BE-32/33 are not among the 21 assigned slices in this handoff; no Dev2 completion or reassignment is inferred.
+The explicit temporary directory accommodates the known Windows permission issue. The post-BE-58 verification baseline is **3,383 passing tests**, including three fresh-process startup regressions. This is a combined suite result, not a sum of historical developer counts.
+
+## Existing Developer 1 foundations
+
+The app registers eight blueprints: `health`, `auth`, `account_settings`, `branches`, `users`, `products`, `category_variants`, `operations` (49 route rules including Flask static). Coverage includes authentication, account/business settings, branch/staff management, products/categories/variants, overview, adjustments, product requests, sales, cancellation requests and returns. See [API_CONTRACT.md](../API_CONTRACT.md) for individual routes.
+
+`session_auth.py` provides trusted session loading, access-version invalidation, cookie handling and CSRF enforcement. `auth_workflows.py` defines authentication repository interfaces. `permissions.py` and `isolation_rules.py` define role/resource and business/branch scope checks. These are now local merged interfaces; they have not been applied to Developer 2 provisional routes. Preserve server-derived identity and CSRF checks; consult `SESSION_AUTH_FOUNDATION.md`, `API_SECURITY_FOUNDATION.md` and `ROLE_PERMISSIONS.md` before assigning grants.
+
+`repository_contracts.py` defines BranchRepository, UserRepository, BusinessSettingsRepository, ProductRepository, CategoryVariantRepository and OperationsRepository with explicit installers and typed errors. `create_app()` installs no application repositories or persistent auth/session adapters. Missing dependencies deliberately produce errors such as 501 after applicable security/validation checks. Existing operations ports do not establish purchase-history, forecast or supplier contracts.
+
+`db.py` initializes shared SQLAlchemy/Migrate extensions. Transaction hashing, idempotency decisions, ordered balance keys and inventory movement rules exist in Developer 1 modules; they do not supply durable replay storage, locking or atomic MySQL repositories. Approved DDL/migrations and real rollback/concurrency tests remain outstanding. Resolve the database/auth storage decisions documented in `INTEGRATION_READINESS.md`, `BACKEND_DATABASE_DECISIONS.md` and `TRANSACTION_SAFETY_CONTRACT.md` with their owners.
+
+## Developer 2 task status
+
+All 21 assigned main tasks below remain **PARTIAL overall**. The independent slices listed exist; full authorized persistent workflows remain unfinished. BE-32/33 are outside this assignment.
 
 | Task | Implemented/tested slice | Dev2 implementation remaining | Missing dependency / approved team decision |
 | --- | --- | --- | --- |
@@ -46,24 +69,30 @@ Implemented/tested below means existing provisional helpers and recorded tests, 
 | BE-49 | Same-business branch summaries | Authorized cross-branch report | Complete comparable branch sales source and approved comparison periods/metrics |
 | BE-50 | In-memory CSV with exact Decimal support | Authorized filters, source retrieval and export endpoint | Approved report/filter/response contracts and export limits; retain CSV safety |
 
-## Shared integration checklist and exact recommended order
+## Shared tasks and remaining implementation order
 
-1. Team reviews the existing dirty layout migration and agrees module/import ownership and integration method. Do not merge or switch as part of this documentation task. Preserve both branches' history and tests.
-2. Database/team approves schema version, DDL/migrations and unresolved auth storage decisions; confirm grants, purchase contracts, transfer discrepancy/cancellation policies and reporting definitions. Record decisions rather than guessing them.
-3. Integrate Dev1 application factory, database foundation, session/CSRF/RBAC and repository/error contracts into the agreed layout; implement/inject required persistent auth/session/rate-limit adapters with their owners. Verify trusted sessions, invalidation and tenant/branch isolation (BE-51).
-4. Establish approved Dev2 supplier/PO/read ports and adapters. First concrete Dev2 functional implementation: replace BE-28's valid-request 501 with authorized supplier creation backed by the approved repository, then test persistence and denied/cross-tenant requests. This requires the agreed contract and trusted session; it is not independently ready today.
-5. Implement BE-29 persisted PO creation and reads without stock changes; then BE-52 durable transaction/idempotency adapters and BE-30 receiving. Verify rollback, concurrent duplicate receipts, payload conflicts, over-receipt policy and movement/balance reconciliation on MySQL.
-6. Implement BE-31 purchase-history/supplier reads and BE-48 purchase-report inputs using persisted purchasing contracts.
-7. Integrate BE-34?37 transfer services only after lifecycle/discrepancy/cancellation decisions and transaction adapters pass; reuse Dev1 rules rather than duplicating them.
-8. Implement BE-39 trusted sales preparation, then BE-40/45 forecast availability/API, then BE-41 trusted-stock replenishment, then BE-42 alternatives. Preserve missing-versus-zero and scope/unit boundaries.
-9. Integrate BE-46?50 reports/exports and BE-38/43/44 AI workflows with approved sources, provider configuration and decision persistence.
-10. BE-54: add real app tests throughout steps 3?9, covering session/CSRF/grants, tenant/branch/resource isolation, repository errors and absent adapters; add MySQL rollback/concurrency/replay tests for writes. Existing seven provisional coexistence tests prove only isolated boundaries; adapt their main-app expectations when registration changes.
-11. BE-57: reconcile Dev2 collection with Dev1 authentication/backend collections, approved routes, cookie/CSRF flow and environment variables. Enable guarded requests only when corresponding routes work; replace 501 examples with verified contracts and run collection smoke checks. Preserve historical examples/results as history.
-12. Run combined backend suite and integration checks, record actual counts/environment, complete BE-58 regression fixes and refresh BE-59 before team review. No combined passing count is currently known.
+| Task | Current status | Remaining work |
+| --- | --- | --- |
+| BE-51 | PARTIAL: merged auth/CSRF/permission foundations available; Dev2 integration pending | Apply trusted sessions, approved grants and scope checks to each approved Dev2 API |
+| BE-52 | PARTIAL: Dev1 transaction/idempotency rules and operations ports exist | Agree purchasing/transfer contracts; implement durable atomic adapters, locks and replay; test real concurrency |
+| BE-53 | Completed coverage for current independent slices; ongoing integration coverage | Extend meaningful tests as approved services and adapters are implemented |
+| BE-54 | PARTIAL: Dev1 application tests and isolated Dev2 coexistence tests exist | Add authorized Dev2 main-app, persistence, rollback and concurrency integration tests |
+| BE-57 | Completed independent collection artifact and contract tests; partial live workflow coverage | Reconcile Dev2 examples with merged auth/cookie/CSRF contracts; enable requests only after corresponding APIs work |
+| BE-58 | Completed confirmed startup collision correction in `d399b7e`, with fresh-process regressions; earlier zero-demand fix retained | Address future confirmed defects as integration proceeds; no claim of exhaustive bug elimination |
+| BE-59 | Completed post-merge documentation update for this snapshot | Refresh handoff as contracts, adapters and registered APIs change |
 
-## Work Baha can perform independently before integration
+The three provisional Developer 2 blueprints are `suppliers`, `purchase_orders` and `purchase_receiving`. In isolated apps they validate requests (400 for invalid input, 501 for structurally valid unimplemented operations). None is registered in the merged app. Purchase history, transfers, AI, forecasting, replenishment, dashboard, reports and export APIs are also not registered. Developer 1's existing operational APIs do not complete these Developer 2 workflows.
 
-Review owned pure helpers for reproducible defects and fix only confirmed defects with focused regression coverage (BE-58/53); inspect existing synthetic pipeline/report consistency gaps and add meaningful cases using current contracts; validate owned examples, package imports and Postman JSON against the current layout; prepare fixtures and test scenarios from already documented boundaries; keep this checklist current. The existing package migration can be reviewed independently, but its adoption in the combined application requires agreement. No specific additional functional defect was established by this documentation review. Additional guessed CRUD, SQL schemas, role grants, transaction implementations or business policies are not independent completion work. Live receiving, purchase history, trusted forecasting/replenishment and authenticated routes depend on integration and the contracts above.
+Recommended dependency order:
+
+1. Agree schema/version, persistent auth/session/rate-limit ownership, supplier/purchasing read/write ports and approved grants. Resolve transfer lifecycle/discrepancy/cancellation and reporting definitions with the relevant owners. Git/layout integration and startup repair are already complete.
+2. BE-51 and BE-28: wire trusted security and approved supplier repositories/services, then test denied and cross-tenant requests before enabling the supplier API.
+3. BE-29, BE-52 and BE-30: persist orders without inventory mutation; implement durable atomic receiving, ledger/balance changes and idempotent replay. Prove rollback, payload conflicts and concurrent duplicate handling on the approved database.
+4. BE-31 and deferred BE-48 purchasing inputs: implement scoped persisted history and supplier records.
+5. BE-34?37: implement transfer services only after lifecycle rules and durable movement/replay adapters are approved; reuse Developer 1 rules.
+6. BE-39, BE-40/45, BE-41, BE-42: connect trusted sales completeness, forecast/fallback, authoritative stock and supplier/branch alternatives in that order. Preserve missing-versus-zero, unit and tenant boundaries.
+7. BE-46?50 and BE-38/43/44: connect approved reporting/snapshot sources, safe exports, provider configuration, scoped AI context and persistent decision logs. No live Gemini validation is inferred from mocked tests.
+8. Carry BE-53/54 security and integration tests through every step; update BE-57 collection requests when APIs become available, rerun the combined suite, and refresh BE-59. Production review additionally requires persistent adapters, operational configuration and real database/concurrency evidence.
 
 ---
 

@@ -22,4 +22,3 @@ def test_application_routes():
 def test_flask_cli():
     result = run('-m', 'flask', '--app', 'src.app', 'routes')
     assert 'health' in result.stdout
-
