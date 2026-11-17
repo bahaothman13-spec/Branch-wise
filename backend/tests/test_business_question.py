@@ -10,7 +10,7 @@ from unittest.mock import patch
 
 import pytest
 
-from business_question import (
+from branchwise.ai.business_question import (
     MAX_FACTS_JSON_CHARS,
     MAX_QUESTION_CHARS,
     prepare_business_question,

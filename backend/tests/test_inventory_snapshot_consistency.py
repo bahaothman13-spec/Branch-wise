@@ -2,7 +2,7 @@
 
 from copy import deepcopy
 
-from inventory_snapshot_report import summarize_inventory_snapshot
+from branchwise.reports.inventory_snapshot_report import summarize_inventory_snapshot
 
 
 def observation(contribution_id, **changes):

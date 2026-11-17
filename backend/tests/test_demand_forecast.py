@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from demand_forecast import calculate_demand_forecast
+from branchwise.forecasting.demand_forecast import calculate_demand_forecast
 
 
 @pytest.mark.parametrize("history", [[0], [0.0, 0]])

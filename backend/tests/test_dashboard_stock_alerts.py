@@ -4,7 +4,7 @@ import copy
 
 import pytest
 
-from dashboard_stock_alerts import prepare_dashboard_stock_alerts
+from branchwise.dashboard.dashboard_stock_alerts import prepare_dashboard_stock_alerts
 
 
 def row(item_id, status, business_id=1, branch_id=2):
@@ -122,8 +122,7 @@ def test_no_automatic_business_actions():
     # Pure-function tests: the helper takes supplied rows and does not import
     # database, Flask, Gemini, or a purchase-order service.
     import inspect
-    import dashboard_stock_alerts
-
+    import branchwise.dashboard.dashboard_stock_alerts as dashboard_stock_alerts
     source = inspect.getsource(dashboard_stock_alerts)
     for forbidden in ("import flask", "import mysql", "import google", "import requests", "subprocess"):
         assert forbidden not in source.lower()

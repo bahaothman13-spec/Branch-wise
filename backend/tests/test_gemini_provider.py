@@ -20,9 +20,9 @@ from google.genai._interactions import (
 from google.genai.errors import ContinuationInterruptedError
 from google.genai.interactions import Interaction
 
-from ai_config import load_ai_config
-from ai_service import run_ai
-from gemini_provider import gemini_provider
+from branchwise.ai.ai_config import load_ai_config
+from branchwise.ai.ai_service import run_ai
+from branchwise.ai.gemini_provider import gemini_provider
 
 
 FAKE_GEMINI_KEY = "fake-gemini-key-for-local-tests"

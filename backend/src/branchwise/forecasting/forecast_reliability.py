@@ -1,6 +1,6 @@
 """BE-45 Phase 1: forecast availability without AI or application integration."""
 
-from demand_forecast import calculate_demand_forecast
+from branchwise.forecasting.demand_forecast import calculate_demand_forecast
 
 
 def get_forecast_availability(historical_quantities, forecast_days, window_days):

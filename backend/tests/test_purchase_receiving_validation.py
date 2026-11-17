@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import backend.purchase_receiving_validation as receiving_validation
-from backend.purchase_receiving_validation import validate_purchase_receiving_input
+import branchwise.purchasing.purchase_receiving_validation as receiving_validation
+from branchwise.purchasing.purchase_receiving_validation import validate_purchase_receiving_input
 
 
 class IntegerSubclass(int):

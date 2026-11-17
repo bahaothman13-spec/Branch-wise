@@ -1,6 +1,6 @@
 from flask import Blueprint, jsonify, request
 
-from supplier_validation import OPTIONAL_FIELDS, validate_supplier_input
+from branchwise.suppliers.supplier_validation import OPTIONAL_FIELDS, validate_supplier_input
 
 
 supplier_bp = Blueprint("suppliers", __name__, url_prefix="/api")

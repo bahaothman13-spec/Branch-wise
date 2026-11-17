@@ -3,7 +3,7 @@
 from copy import deepcopy
 from decimal import Decimal, localcontext
 
-from sales_performance_report import calculate_sales_performance_report
+from branchwise.reports.sales_performance_report import calculate_sales_performance_report
 
 
 def observation(

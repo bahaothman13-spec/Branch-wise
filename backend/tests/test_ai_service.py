@@ -9,9 +9,9 @@ from unittest.mock import Mock
 
 import pytest
 
-from ai_client import call_ai_provider
-from ai_config import load_ai_config
-from ai_service import run_ai
+from branchwise.ai.ai_client import call_ai_provider
+from branchwise.ai.ai_config import load_ai_config
+from branchwise.ai.ai_service import run_ai
 
 
 FAKE_API_KEY = "private-test-key-for-ai-service"

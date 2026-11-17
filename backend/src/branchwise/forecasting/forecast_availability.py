@@ -1,7 +1,7 @@
 """BE-45 Phase 2: require daily date coverage before forecasting."""
 
-from forecast_reliability import get_forecast_availability
-from sales_history import prepare_daily_sales_history
+from branchwise.forecasting.forecast_reliability import get_forecast_availability
+from branchwise.forecasting.sales_history import prepare_daily_sales_history
 
 
 def get_date_aware_forecast_availability(

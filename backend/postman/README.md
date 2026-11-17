@@ -2,7 +2,7 @@
 
 Import `BranchWise.postman_collection.json` as Collection v2.1. Start the
 existing app from the repository root with
-`.\.venv\Scripts\python.exe -B -m flask --app backend.app run`.
+`.\.venv\Scripts\python.exe -B -m flask --app backend.src.app run`.
 The collection variable `base_url` defaults to `http://127.0.0.1:5000`.
 Run the Registered API folder to check GET `/api/health` (200, status ok).
 No credentials or authentication contract are supplied.

@@ -4,7 +4,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.transfer_cancellation_validation import validate_transfer_cancellation_input as validate
+from branchwise.transfers.transfer_cancellation_validation import validate_transfer_cancellation_input as validate
 
 
 @pytest.mark.parametrize("value", [1, 2, 2**63, 10**100])

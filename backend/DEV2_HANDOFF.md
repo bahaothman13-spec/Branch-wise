@@ -1,3 +1,74 @@
+# Current integration checklist ? verified 2026-11-17 (BE-59)
+
+This section supersedes current-state claims in the historical handoff below. Historical paths, commits and test counts remain evidence of their original snapshots, not current instructions. Existing user edits are retained.
+
+## Verified Git and filesystem state
+
+Read-only `git ls-remote origin` confirmed main `004ca0766be8d7704670e4c21509236749523832`, backend-dev1 `ca1adad4cf4f0ec7db85b3ffbc01d63935a7876b`, backend-dev2 `e600d273173170f13b189c8de9d200906930ac02`; cached origin refs agree. Current branch is `backend-dev2`, aligned with origin. No unmerged index entries exist. The tree is dirty: existing deletions of root backend modules, modified examples/tests/configuration/documentation, and untracked `backend/src/` and `backend/README.md`. These changes are not committed or implied approved by this review.
+
+Current local modules live under `backend/src/branchwise/{suppliers,purchasing,transfers,ai,forecasting,replenishment,dashboard,reports}/`; app and empty database placeholder are `backend/src/app.py` and `backend/src/db.py`. Tests remain `backend/tests/`. The local app exposes health only; provisional supplier/PO/receiving Blueprints remain unregistered. Developer 1's inspected paths are Git objects at `origin/backend-dev1:backend/...`, not locally integrated files. Reconcile layout/imports deliberately during integration.
+
+Latest full backend result supplied by Baha: **2,254 passed**. It was not rerun in this documentation-only review. Earlier 2,242, 2,233 and other counts below are historical. Developer 1's readiness document separately records 1,126 passed; do not add suite counts or claim a combined result.
+
+## Available Developer 1 interfaces and missing dependencies
+
+At `ca1adad`, `session_auth.py` provides `TrustedSessionUser`, `AuthenticatedSession`, `SessionStore`, `SessionManager`, `install_session_auth`, `require_authenticated_session`, and cookie helpers. `auth_workflows.py` provides `AuthRepository`/`AuthAccount`; `permissions.py` provides `Role`, `AuthenticatedPrincipal`, `ResourceScope`, `has_permission`; `isolation_rules.py` supplies scope checks. Session validity includes trusted reload and access-version invalidation; state-changing integration must retain CSRF protection. These exist remotely but are not integrated into Dev2 routes. Refer to `SESSION_AUTH_FOUNDATION.md`, `API_SECURITY_FOUNDATION.md` and `ROLE_PERMISSIONS.md` before selecting actual grants; never derive trusted identity from JSON IDs.
+
+`repository_contracts.py` provides BranchRepository, UserRepository, BusinessSettingsRepository, ProductRepository, CategoryVariantRepository and OperationsRepository, typed records/errors and explicit installers. Operations ports support Dev1 operations; their existence does not establish a purchase-history or forecast source contract. No default persistent adapters are installed. Dedicated supplier, purchase-order, purchase-receipt, purchase-history, forecasting/reporting and AI decision-log persistence contracts are still needed; agree their ownership and signatures before coding them.
+
+Developer 1's `db.py` supplies Flask-SQLAlchemy/Flask-Migrate foundation, unlike the local empty placeholder. `transaction_safety_rules.py` supplies canonical payload hashing, idempotency requests/decisions and ordered inventory balance keys; `inventory_movement_rules.py` supplies movement rules. `TRANSACTION_SAFETY_CONTRACT.md` describes durable atomic requirements. These are rules/contracts, not a working transaction repository, MySQL adapter, lock implementation or durable replay store. Approved DDL/migrations, constraints, adapters and real concurrency tests remain missing. Consult `INTEGRATION_READINESS.md` and `BACKEND_DATABASE_DECISIONS.md`; database coordination must resolve password hashing, CSRF persistence and schema-version discrepancies documented there.
+
+## Per-task remaining work
+
+Implemented/tested below means existing provisional helpers and recorded tests, not a fresh run or production completion. All assigned BE-28?50 tasks remain PARTIAL. BE-32/33 are not among the 21 assigned slices in this handoff; no Dev2 completion or reassignment is inferred.
+
+| Task | Implemented/tested slice | Dev2 implementation remaining | Missing dependency / approved team decision |
+| --- | --- | --- | --- |
+| BE-28 | Supplier validation and provisional route | Authorized CRUD/service and integration tests | Supplier repository/schema; uniqueness/deactivation policy and approved grants |
+| BE-29 | PO validation, exact costs, provisional 400/501 route | Scoped supplier/branch/catalog lookups; atomic PO creation/update and response mapping | PO/line contract and adapter; reference uniqueness, duplicate-line and product/variant rules. Creating a PO must not mutate inventory |
+| BE-30 | Receiving validation and provisional 400/501 route | Load authorized order/lines; validate receipt against persisted state; commit receipt, balance, movement and replay result atomically | Receipt repository, source identity, locks and durable idempotency; partial/over-receipt, status and cost policies |
+| BE-31 | Supplier-filterable in-memory purchase history | Authorized paginated history and supplier records backed by real reads | Purchase-history port, stable record/response identities; date/status/cost/filter definitions; do not infer spending from quotes |
+| BE-34 | Structural transfer-request validation | Scoped request service/routes and persistence | Transfer repository/schema, approved source/destination and stock rules; reuse Dev1 rules |
+| BE-35 | Structural approval/rejection validation | Authorized decision/dispatch orchestration | Transfer persistence and atomic stock movement; approval/dispatch lifecycle decisions |
+| BE-36 | Structural receipt validation | Receipt/discrepancy orchestration and tests | Atomic receiving adapter; confirm whether outstanding discrepancy permits completion and how settlement works |
+| BE-37 | Structural cancellation validation | Authorized cancellation/replay orchestration | Durable source/movement/replay storage; resolve post-dispatch cancellation against Dev1 transition rules |
+| BE-38 | Config/client/service/Gemini adapter, mocked tests | Trusted service wiring and operational error handling | Approved provider/model configuration, credentials and live validation; no live success inferred |
+| BE-39 | Scoped daily aggregation and missing-day detection | Map trusted sales source to observations with completeness metadata | Sales read contract; cancellation/returns eligibility, timezone, variant mapping and observed-zero policy. Missing days remain missing |
+| BE-40 | Moving-average calculation and zero-demand regression fix | Authorized forecasting endpoint/service using BE-39/45 | Trusted sales adapter; approve horizon/window, response and access contracts; algorithm exists already |
+| BE-41 | Replenishment calculation and date-aware forecast composition | Trusted same-scope availability read and service/endpoint | Authoritative available quantity, compatible units and snapshot timing; approve horizon/replenishment policy. No automatic PO creation |
+| BE-42 | Supplier cost comparison | Scoped supplier/branch alternatives and responses | Real price/availability sources; approve branch ranking, lead-time and cost semantics |
+| BE-43 | Question/context preparation | Authorized context retrieval and AI endpoint | Scoped source ports and approved assistant response/data-disclosure policy |
+| BE-44 | Decision-input validation | Persist/read authorized decision logs | Decision-log contract/schema, retention and visibility decisions |
+| BE-45 | Forecast availability/reliability/fallback helpers | Apply consistent fallback and safe errors through real APIs | Source completeness and approved reliability/response policy |
+| BE-46 | Stock-alert summaries | Authorized dashboard aggregation | Trusted stock sources; approved metrics and low-stock definitions |
+| BE-47 | Sales/product aggregates and consistency tests | Scoped real-source report endpoint | Sales adapter; approve net sales, returns, date/time and filter semantics |
+| BE-48 | Inventory snapshot grouping and consistency tests | Real snapshot integration and deferred purchase-report slice | Snapshot/purchase ports; approve quantity basis, cutoff and purchase metric definitions |
+| BE-49 | Same-business branch summaries | Authorized cross-branch report | Complete comparable branch sales source and approved comparison periods/metrics |
+| BE-50 | In-memory CSV with exact Decimal support | Authorized filters, source retrieval and export endpoint | Approved report/filter/response contracts and export limits; retain CSV safety |
+
+## Shared integration checklist and exact recommended order
+
+1. Team reviews the existing dirty layout migration and agrees module/import ownership and integration method. Do not merge or switch as part of this documentation task. Preserve both branches' history and tests.
+2. Database/team approves schema version, DDL/migrations and unresolved auth storage decisions; confirm grants, purchase contracts, transfer discrepancy/cancellation policies and reporting definitions. Record decisions rather than guessing them.
+3. Integrate Dev1 application factory, database foundation, session/CSRF/RBAC and repository/error contracts into the agreed layout; implement/inject required persistent auth/session/rate-limit adapters with their owners. Verify trusted sessions, invalidation and tenant/branch isolation (BE-51).
+4. Establish approved Dev2 supplier/PO/read ports and adapters. First concrete Dev2 functional implementation: replace BE-28's valid-request 501 with authorized supplier creation backed by the approved repository, then test persistence and denied/cross-tenant requests. This requires the agreed contract and trusted session; it is not independently ready today.
+5. Implement BE-29 persisted PO creation and reads without stock changes; then BE-52 durable transaction/idempotency adapters and BE-30 receiving. Verify rollback, concurrent duplicate receipts, payload conflicts, over-receipt policy and movement/balance reconciliation on MySQL.
+6. Implement BE-31 purchase-history/supplier reads and BE-48 purchase-report inputs using persisted purchasing contracts.
+7. Integrate BE-34?37 transfer services only after lifecycle/discrepancy/cancellation decisions and transaction adapters pass; reuse Dev1 rules rather than duplicating them.
+8. Implement BE-39 trusted sales preparation, then BE-40/45 forecast availability/API, then BE-41 trusted-stock replenishment, then BE-42 alternatives. Preserve missing-versus-zero and scope/unit boundaries.
+9. Integrate BE-46?50 reports/exports and BE-38/43/44 AI workflows with approved sources, provider configuration and decision persistence.
+10. BE-54: add real app tests throughout steps 3?9, covering session/CSRF/grants, tenant/branch/resource isolation, repository errors and absent adapters; add MySQL rollback/concurrency/replay tests for writes. Existing seven provisional coexistence tests prove only isolated boundaries; adapt their main-app expectations when registration changes.
+11. BE-57: reconcile Dev2 collection with Dev1 authentication/backend collections, approved routes, cookie/CSRF flow and environment variables. Enable guarded requests only when corresponding routes work; replace 501 examples with verified contracts and run collection smoke checks. Preserve historical examples/results as history.
+12. Run combined backend suite and integration checks, record actual counts/environment, complete BE-58 regression fixes and refresh BE-59 before team review. No combined passing count is currently known.
+
+## Work Baha can perform independently before integration
+
+Review owned pure helpers for reproducible defects and fix only confirmed defects with focused regression coverage (BE-58/53); inspect existing synthetic pipeline/report consistency gaps and add meaningful cases using current contracts; validate owned examples, package imports and Postman JSON against the current layout; prepare fixtures and test scenarios from already documented boundaries; keep this checklist current. The existing package migration can be reviewed independently, but its adoption in the combined application requires agreement. No specific additional functional defect was established by this documentation review. Additional guessed CRUD, SQL schemas, role grants, transaction implementations or business policies are not independent completion work. Live receiving, purchase history, trusted forecasting/replenishment and authenticated routes depend on integration and the contracts above.
+
+---
+
+# Historical handoff (preserved)
+
 # BE-59: Backend Developer 2 — implementation and integration handoff
 
 **Project:** BranchWise — Smart Inventory Management & Decision Support System
@@ -17,27 +88,27 @@ The file paths below are relative to this `backend/` directory. `Phase 1` means 
 
 | Task | Work completed / phases | Production module | Test module | Status |
 | --- | --- | --- | --- | --- |
-| **BE-28** Supplier Management APIs | Phase 1: supplier input validation | [`supplier_validation.py`](supplier_validation.py) | [`test_supplier_validation.py`](tests/test_supplier_validation.py) | PARTIAL |
-| **BE-29** Purchase Order APIs | Phase 1: purchase-order input validation; Phase 2: provisional Purchase Order API | [`purchase_order_validation.py`](purchase_order_validation.py), [`purchase_order_routes.py`](purchase_order_routes.py) | [`test_purchase_order_validation.py`](tests/test_purchase_order_validation.py), [`test_purchase_order_routes.py`](tests/test_purchase_order_routes.py) | PARTIAL |
-| **BE-30** Purchase Receiving | Phase 1: receiving-input validation; Phase 2: provisional Purchase Receiving API | [`purchase_receiving_validation.py`](purchase_receiving_validation.py), [`purchase_receiving_routes.py`](purchase_receiving_routes.py) | [`test_purchase_receiving_validation.py`](tests/test_purchase_receiving_validation.py), [`test_purchase_receiving_routes.py`](tests/test_purchase_receiving_routes.py) | PARTIAL |
-| **BE-31** Purchase History & Supplier Records APIs | Phase 1: supplier-filterable purchase-history preparation | [`purchase_history.py`](purchase_history.py) | [`test_purchase_history.py`](tests/test_purchase_history.py) | PARTIAL |
-| **BE-34** Stock Transfer Request APIs | Phase 1: structural request validation | [`transfer_request_validation.py`](transfer_request_validation.py) | [`test_transfer_request_validation.py`](tests/test_transfer_request_validation.py) | PARTIAL |
-| **BE-35** Transfer Approval & Dispatch Processing | Phase 1: approval/rejection structural validation; dispatch integration blocked | [`transfer_decision_validation.py`](transfer_decision_validation.py) | [`test_transfer_decision_validation.py`](tests/test_transfer_decision_validation.py) | PARTIAL |
-| **BE-36** Transfer Receiving & Discrepancy Handling | Phase 1: receiving-input structural validation | [`transfer_receiving_validation.py`](transfer_receiving_validation.py) | [`test_transfer_receiving_validation.py`](tests/test_transfer_receiving_validation.py) | PARTIAL |
-| **BE-37** Transfer Cancellation & Idempotency Rules | Phase 1: structural cancellation-input validation | [`transfer_cancellation_validation.py`](transfer_cancellation_validation.py) | [`test_transfer_cancellation_validation.py`](tests/test_transfer_cancellation_validation.py) | PARTIAL |
-| **BE-38** AI Service Integration Layer | Phases 1–3: configuration, generic service/client boundary, Gemini adapter and mocked tests | [`ai_config.py`](ai_config.py), [`ai_client.py`](ai_client.py), [`ai_service.py`](ai_service.py), [`gemini_provider.py`](gemini_provider.py) | `tests/test_ai_*.py`, [`test_gemini_provider.py`](tests/test_gemini_provider.py) | PARTIAL |
-| **BE-39** Historical Sales Data Preparation | Phase 1: daily sales-data preparation/aggregation | [`sales_history.py`](sales_history.py) | [`test_sales_history.py`](tests/test_sales_history.py) | PARTIAL |
-| **BE-40** Demand Forecasting API | Phase 1: independent moving-average forecasting calculations | [`demand_forecast.py`](demand_forecast.py) | [`test_demand_forecast.py`](tests/test_demand_forecast.py) | PARTIAL |
-| **BE-41** Replenishment Recommendation Service | Phase 1: suggested replenishment quantity calculation | [`replenishment.py`](replenishment.py) | [`test_replenishment.py`](tests/test_replenishment.py) | PARTIAL |
-| **BE-42** Supplier & Branch Alternative Comparison | Phase 1: supplier cost-comparison calculations/validation | [`alternative_comparison.py`](alternative_comparison.py) | [`test_alternative_comparison.py`](tests/test_alternative_comparison.py) | PARTIAL |
-| **BE-43** AI Business Question Assistant API | Phase 1: business question and context preparation | [`business_question.py`](business_question.py) | [`test_business_question.py`](tests/test_business_question.py) | PARTIAL |
-| **BE-44** AI Decision Log APIs | Phase 1: AI decision-input validation | [`decision_input.py`](decision_input.py) | [`test_decision_input.py`](tests/test_decision_input.py) | PARTIAL |
-| **BE-45** AI Reliability, Validation & Fallback Handling | Phase 1: forecast availability/reliability handling | [`forecast_reliability.py`](forecast_reliability.py) | [`test_forecast_reliability.py`](tests/test_forecast_reliability.py) | PARTIAL |
-| **BE-46** Dashboard Summary APIs | Phase 1: low/out-of-stock alert summaries | [`dashboard_stock_alerts.py`](dashboard_stock_alerts.py) | [`test_dashboard_stock_alerts.py`](tests/test_dashboard_stock_alerts.py) | PARTIAL |
-| **BE-47** Sales & Product Performance Reports | Phases 1–3: sales/product calculations, observed-day and date/product breakdowns | [`sales_performance_report.py`](sales_performance_report.py) | [`test_sales_performance_report.py`](tests/test_sales_performance_report.py) | PARTIAL |
-| **BE-48** Inventory & Purchase Reports | Phase 1: inventory snapshot quantity summary; Phase 2: per-group contribution counts; purchase-report slice deferred | [`inventory_snapshot_report.py`](inventory_snapshot_report.py) | [`test_inventory_snapshot_report.py`](tests/test_inventory_snapshot_report.py) | PARTIAL |
-| **BE-49** Business & Branch Comparison Reports | Phase 1: same-business branch sales-summary preparation | [`branch_comparison_report.py`](branch_comparison_report.py) | [`test_branch_comparison_report.py`](tests/test_branch_comparison_report.py) | PARTIAL |
-| **BE-50** Report Filtering & Export APIs | Phase 1: safe in-memory CSV; **Phase 2: exact `Decimal` CSV support** | [`report_export.py`](report_export.py) | [`test_report_export.py`](tests/test_report_export.py) | PARTIAL |
+| **BE-28** Supplier Management APIs | Phase 1: supplier input validation | [`supplier_validation.py`](src/branchwise/suppliers/supplier_validation.py) | [`test_supplier_validation.py`](tests/test_supplier_validation.py) | PARTIAL |
+| **BE-29** Purchase Order APIs | Phase 1: purchase-order input validation; Phase 2: provisional Purchase Order API | [`purchase_order_validation.py`](src/branchwise/purchasing/purchase_order_validation.py), [`purchase_order_routes.py`](src/branchwise/purchasing/purchase_order_routes.py) | [`test_purchase_order_validation.py`](tests/test_purchase_order_validation.py), [`test_purchase_order_routes.py`](tests/test_purchase_order_routes.py) | PARTIAL |
+| **BE-30** Purchase Receiving | Phase 1: receiving-input validation; Phase 2: provisional Purchase Receiving API | [`purchase_receiving_validation.py`](src/branchwise/purchasing/purchase_receiving_validation.py), [`purchase_receiving_routes.py`](src/branchwise/purchasing/purchase_receiving_routes.py) | [`test_purchase_receiving_validation.py`](tests/test_purchase_receiving_validation.py), [`test_purchase_receiving_routes.py`](tests/test_purchase_receiving_routes.py) | PARTIAL |
+| **BE-31** Purchase History & Supplier Records APIs | Phase 1: supplier-filterable purchase-history preparation | [`purchase_history.py`](src/branchwise/purchasing/purchase_history.py) | [`test_purchase_history.py`](tests/test_purchase_history.py) | PARTIAL |
+| **BE-34** Stock Transfer Request APIs | Phase 1: structural request validation | [`transfer_request_validation.py`](src/branchwise/transfers/transfer_request_validation.py) | [`test_transfer_request_validation.py`](tests/test_transfer_request_validation.py) | PARTIAL |
+| **BE-35** Transfer Approval & Dispatch Processing | Phase 1: approval/rejection structural validation; dispatch integration blocked | [`transfer_decision_validation.py`](src/branchwise/transfers/transfer_decision_validation.py) | [`test_transfer_decision_validation.py`](tests/test_transfer_decision_validation.py) | PARTIAL |
+| **BE-36** Transfer Receiving & Discrepancy Handling | Phase 1: receiving-input structural validation | [`transfer_receiving_validation.py`](src/branchwise/transfers/transfer_receiving_validation.py) | [`test_transfer_receiving_validation.py`](tests/test_transfer_receiving_validation.py) | PARTIAL |
+| **BE-37** Transfer Cancellation & Idempotency Rules | Phase 1: structural cancellation-input validation | [`transfer_cancellation_validation.py`](src/branchwise/transfers/transfer_cancellation_validation.py) | [`test_transfer_cancellation_validation.py`](tests/test_transfer_cancellation_validation.py) | PARTIAL |
+| **BE-38** AI Service Integration Layer | Phases 1–3: configuration, generic service/client boundary, Gemini adapter and mocked tests | [`ai_config.py`](src/branchwise/ai/ai_config.py), [`ai_client.py`](src/branchwise/ai/ai_client.py), [`ai_service.py`](src/branchwise/ai/ai_service.py), [`gemini_provider.py`](src/branchwise/ai/gemini_provider.py) | `tests/test_ai_*.py`, [`test_gemini_provider.py`](tests/test_gemini_provider.py) | PARTIAL |
+| **BE-39** Historical Sales Data Preparation | Phase 1: daily sales-data preparation/aggregation | [`sales_history.py`](src/branchwise/forecasting/sales_history.py) | [`test_sales_history.py`](tests/test_sales_history.py) | PARTIAL |
+| **BE-40** Demand Forecasting API | Phase 1: independent moving-average forecasting calculations | [`demand_forecast.py`](src/branchwise/forecasting/demand_forecast.py) | [`test_demand_forecast.py`](tests/test_demand_forecast.py) | PARTIAL |
+| **BE-41** Replenishment Recommendation Service | Phase 1: suggested replenishment quantity calculation | [`replenishment.py`](src/branchwise/replenishment/replenishment.py) | [`test_replenishment.py`](tests/test_replenishment.py) | PARTIAL |
+| **BE-42** Supplier & Branch Alternative Comparison | Phase 1: supplier cost-comparison calculations/validation | [`alternative_comparison.py`](src/branchwise/replenishment/alternative_comparison.py) | [`test_alternative_comparison.py`](tests/test_alternative_comparison.py) | PARTIAL |
+| **BE-43** AI Business Question Assistant API | Phase 1: business question and context preparation | [`business_question.py`](src/branchwise/ai/business_question.py) | [`test_business_question.py`](tests/test_business_question.py) | PARTIAL |
+| **BE-44** AI Decision Log APIs | Phase 1: AI decision-input validation | [`decision_input.py`](src/branchwise/ai/decision_input.py) | [`test_decision_input.py`](tests/test_decision_input.py) | PARTIAL |
+| **BE-45** AI Reliability, Validation & Fallback Handling | Phase 1: forecast availability/reliability handling | [`forecast_reliability.py`](src/branchwise/forecasting/forecast_reliability.py) | [`test_forecast_reliability.py`](tests/test_forecast_reliability.py) | PARTIAL |
+| **BE-46** Dashboard Summary APIs | Phase 1: low/out-of-stock alert summaries | [`dashboard_stock_alerts.py`](src/branchwise/dashboard/dashboard_stock_alerts.py) | [`test_dashboard_stock_alerts.py`](tests/test_dashboard_stock_alerts.py) | PARTIAL |
+| **BE-47** Sales & Product Performance Reports | Phases 1–3: sales/product calculations, observed-day and date/product breakdowns | [`sales_performance_report.py`](src/branchwise/reports/sales_performance_report.py) | [`test_sales_performance_report.py`](tests/test_sales_performance_report.py) | PARTIAL |
+| **BE-48** Inventory & Purchase Reports | Phase 1: inventory snapshot quantity summary; Phase 2: per-group contribution counts; purchase-report slice deferred | [`inventory_snapshot_report.py`](src/branchwise/reports/inventory_snapshot_report.py) | [`test_inventory_snapshot_report.py`](tests/test_inventory_snapshot_report.py) | PARTIAL |
+| **BE-49** Business & Branch Comparison Reports | Phase 1: same-business branch sales-summary preparation | [`branch_comparison_report.py`](src/branchwise/reports/branch_comparison_report.py) | [`test_branch_comparison_report.py`](tests/test_branch_comparison_report.py) | PARTIAL |
+| **BE-50** Report Filtering & Export APIs | Phase 1: safe in-memory CSV; **Phase 2: exact `Decimal` CSV support** | [`report_export.py`](src/branchwise/reports/report_export.py) | [`test_report_export.py`](tests/test_report_export.py) | PARTIAL |
 
 **Shared work status:** See the status table below. Implemented unit tests and isolated provisional-route checks do not constitute production authentication, persistence, transaction safety, or deployment readiness.
 
@@ -118,7 +189,7 @@ Until these contracts and tests exist, real order creation, authorization, suppl
 
 ### BE-30 Phase 2 — Provisional Purchase Receiving API
 
-Added [`purchase_receiving_routes.py`](purchase_receiving_routes.py) with an isolated Flask Blueprint for `POST /api/purchase-receiving`, reusing the existing purchase-receiving input validation.
+Added [`purchase_receiving_routes.py`](src/branchwise/purchasing/purchase_receiving_routes.py) with an isolated Flask Blueprint for `POST /api/purchase-receiving`, reusing the existing purchase-receiving input validation.
 
 - Valid requests return HTTP 501 because authentication, authorization, business rules, and persistence are not integrated.
 - The Blueprint is **not registered** in `backend/app.py`. No real receiving, database writes, or inventory changes occur.
@@ -153,7 +224,7 @@ Invalid purchase-order and purchase-receiving requests return HTTP 400; structur
 
 ### BE-38 — AI Service Integration Layer, Phases 1–3
 
-**Phase 1/2:** [`ai_config.py`](ai_config.py), [`ai_client.py`](ai_client.py), [`ai_service.py`](ai_service.py) provide configuration, provider-calling and safe text-service boundaries. `run_ai(request_data, provider=None)` accepts a dictionary containing only a nonblank `text` string, checks lengths, invokes an application-supplied callable, and validates a reply containing only `text`. It rejects output that contains the exact configured API key. No SQL, generated code execution or business-data updates are performed by the generic service.
+**Phase 1/2:** [`ai_config.py`](src/branchwise/ai/ai_config.py), [`ai_client.py`](src/branchwise/ai/ai_client.py), [`ai_service.py`](src/branchwise/ai/ai_service.py) provide configuration, provider-calling and safe text-service boundaries. `run_ai(request_data, provider=None)` accepts a dictionary containing only a nonblank `text` string, checks lengths, invokes an application-supplied callable, and validates a reply containing only `text`. It rejects output that contains the exact configured API key. No SQL, generated code execution or business-data updates are performed by the generic service.
 
 An example with a **fake provider** (requires suitable process configuration):
 
@@ -169,7 +240,7 @@ result = run_ai({"text": "Hello"}, provider=fake_provider)
 
 The provider is trusted application code, never user-supplied executable input. Without a provider, valid configured calls return `AI_NOT_CONFIGURED`.
 
-**Phase 3:** [`gemini_provider.py`](gemini_provider.py) implements an explicitly selected Google GenAI adapter; SDK-client calls were **mocked in tests**, not verified against live credentials. The existing code/handoff describes `google-genai==2.34.0` and an Interactions-style call using `store=False`, plus timeout/connection/provider-error mapping. It requires an authorized team member to check the live SDK contract, supported model, access and handling before deployment. **The configured model string `gemini-3.8-flash` is not verified here as a valid live/public model; do not assume it will work.**
+**Phase 3:** [`gemini_provider.py`](src/branchwise/ai/gemini_provider.py) implements an explicitly selected Google GenAI adapter; SDK-client calls were **mocked in tests**, not verified against live credentials. The existing code/handoff describes `google-genai==2.34.0` and an Interactions-style call using `store=False`, plus timeout/connection/provider-error mapping. It requires an authorized team member to check the live SDK contract, supported model, access and handling before deployment. **The configured model string `gemini-3.8-flash` is not verified here as a valid live/public model; do not assume it will work.**
 
 The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG_ERROR`, `AI_NOT_CONFIGURED`, `AI_TIMEOUT`, `AI_CONNECTION_ERROR`, `AI_PROVIDER_ERROR`, and `AI_INVALID_OUTPUT`. The errors should remain safe; do not print API keys or provider exception details.
 
@@ -177,19 +248,19 @@ The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG
 
 ### BE-39 — Historical Sales Data Preparation, Phase 1
 
-[`sales_history.py`](sales_history.py) prepares and aggregates caller-supplied daily sales observations. Dates and sales inclusion are trusted-input responsibilities: gaps, missing dates, cancellations and returns are **not** silently turned into invented zero sales. **Recorded new tests:** 78. **Remaining:** approved actual sales sources, attribution, eligibility and date/timezone policies, database adapters, BE-40 integration.
+[`sales_history.py`](src/branchwise/forecasting/sales_history.py) prepares and aggregates caller-supplied daily sales observations. Dates and sales inclusion are trusted-input responsibilities: gaps, missing dates, cancellations and returns are **not** silently turned into invented zero sales. **Recorded new tests:** 78. **Remaining:** approved actual sales sources, attribution, eligibility and date/timezone policies, database adapters, BE-40 integration.
 
 ### BE-40 — Demand Forecasting API, Phase 1
 
-[`demand_forecast.py`](demand_forecast.py) performs preliminary **moving-average calculations** on supplied historical data. **Recorded new tests:** 69. **Remaining:** approved forecast period/eligibility, real history/Flask/API, scarce-data policy and validation of forecast usefulness.
+[`demand_forecast.py`](src/branchwise/forecasting/demand_forecast.py) performs preliminary **moving-average calculations** on supplied historical data. **Recorded new tests:** 69. **Remaining:** approved forecast period/eligibility, real history/Flask/API, scarce-data policy and validation of forecast usefulness.
 
 ### BE-41 — Replenishment Recommendation Service, Phase 1
 
-[`replenishment.py`](replenishment.py) calculates a provisional quantity `max(0, ceil(forecast_demand - available_qty))` from supplied inputs. It **does not** read inventory or create purchases. **Recorded new tests:** 61. **Remaining:** authoritative BE-20 availability, agreed units/policies, supplier alternatives, service/AI/API integration.
+[`replenishment.py`](src/branchwise/replenishment/replenishment.py) calculates a provisional quantity `max(0, ceil(forecast_demand - available_qty))` from supplied inputs. It **does not** read inventory or create purchases. **Recorded new tests:** 61. **Remaining:** authoritative BE-20 availability, agreed units/policies, supplier alternatives, service/AI/API integration.
 
 #### BE-41 Phase 2 — Forecast-to-Replenishment Composition
 
-Added [`replenishment_service.py`](replenishment_service.py) and [`test_replenishment_service.py`](tests/test_replenishment_service.py), with **16 passing tests**.
+Added [`replenishment_service.py`](src/branchwise/replenishment/replenishment_service.py) and [`test_replenishment_service.py`](tests/test_replenishment_service.py), with **16 passing tests**.
 
 The provisional internal service combines BE-45 date-aware forecast availability with the existing BE-41 replenishment calculation. An unavailable forecast, including missing date coverage or failed reliability checks, returns no replenishment recommendation. A valid zero forecast remains available and is passed to the existing calculation; it is not treated as an unavailable forecast.
 
@@ -215,23 +286,23 @@ BE-39, BE-40, and BE-41 remain **PARTIAL** pending approved sales and inventory 
 
 ### BE-42 — Supplier & Branch Alternative Comparison, Phase 1
 
-[`alternative_comparison.py`](alternative_comparison.py) validates and compares supplied supplier-cost observations using exact `Decimal`, compatible currency/unit/cost basis and explicit unknown-cost handling. The supplier-cost slice is not a real purchase ledger, ranking, or full branch-transfer alternative assessment. **Recorded new tests:** 201. **Remaining:** approved quotes, supplier/branch data, transfer policy, authorization and final selection criteria.
+[`alternative_comparison.py`](src/branchwise/replenishment/alternative_comparison.py) validates and compares supplied supplier-cost observations using exact `Decimal`, compatible currency/unit/cost basis and explicit unknown-cost handling. The supplier-cost slice is not a real purchase ledger, ranking, or full branch-transfer alternative assessment. **Recorded new tests:** 201. **Remaining:** approved quotes, supplier/branch data, transfer policy, authorization and final selection criteria.
 
 ### BE-43 — AI Business Question Assistant API, Phase 1
 
-[`business_question.py`](business_question.py) prepares business questions and their supplied data context; it does **not** retrieve actual business data or deliver a live AI-assisted report. **Recorded new tests:** 45. **Remaining:** authenticated data retrieval, approved context, AI service/Flask wiring and safe answer behavior.
+[`business_question.py`](src/branchwise/ai/business_question.py) prepares business questions and their supplied data context; it does **not** retrieve actual business data or deliver a live AI-assisted report. **Recorded new tests:** 45. **Remaining:** authenticated data retrieval, approved context, AI service/Flask wiring and safe answer behavior.
 
 ### BE-44 — AI Decision Log APIs, Phase 1
 
-[`decision_input.py`](decision_input.py) validates provisional decision input, including `accepted`, `rejected`, `deferred` and an optional reason. It does **not** save a decision. **Recorded new tests:** 48. **Remaining:** trusted user/time, recommendation link/inputs, DB audit history, actual-versus-estimated outcomes and access controls.
+[`decision_input.py`](src/branchwise/ai/decision_input.py) validates provisional decision input, including `accepted`, `rejected`, `deferred` and an optional reason. It does **not** save a decision. **Recorded new tests:** 48. **Remaining:** trusted user/time, recommendation link/inputs, DB audit history, actual-versus-estimated outcomes and access controls.
 
 ### BE-45 — AI Reliability, Validation & Fallback Handling, Phase 1
 
-[`forecast_reliability.py`](forecast_reliability.py) distinguishes an **unavailable forecast** from a legitimate predicted zero and prepares guarded status handling. **Recorded new tests:** 42. **Remaining:** end-to-end availability/low-data/failure fallbacks, service wiring, user-facing messages and operational verification.
+[`forecast_reliability.py`](src/branchwise/forecasting/forecast_reliability.py) distinguishes an **unavailable forecast** from a legitimate predicted zero and prepares guarded status handling. **Recorded new tests:** 42. **Remaining:** end-to-end availability/low-data/failure fallbacks, service wiring, user-facing messages and operational verification.
 
 #### BE-45 Phase 2 — Date-aware Forecast Availability
 
-Added [`forecast_availability.py`](forecast_availability.py) and [`test_forecast_availability.py`](tests/test_forecast_availability.py), with **22 passing tests**.
+Added [`forecast_availability.py`](src/branchwise/forecasting/forecast_availability.py) and [`test_forecast_availability.py`](tests/test_forecast_availability.py), with **22 passing tests**.
 
 The adapter accepts an explicit reporting interval and already-authorized daily observations. It distinguishes an explicitly observed zero-sales day from a missing date, and returns an unavailable result without forecasting when date coverage is incomplete. With complete coverage, it reuses the existing BE-39 daily-history preparation, BE-40 demand forecast, and BE-45 reliability helpers without changing their aggregation or forecasting formulas.
 
@@ -245,11 +316,11 @@ Complete coverage of supplied observations does **not** prove database source co
 
 ### BE-46 — Dashboard Summary APIs, Phase 1
 
-[`dashboard_stock_alerts.py`](dashboard_stock_alerts.py) summarizes **already-classified** low-stock/out-of-stock observations within explicit business/branch scope. It does not compute authoritative stock or decide alert thresholds. **Recorded new tests:** 61. **Recorded commit:** `97e9d0f`. **Remaining:** BE-20 stock classification, other dashboard metrics, authorization and API integration.
+[`dashboard_stock_alerts.py`](src/branchwise/dashboard/dashboard_stock_alerts.py) summarizes **already-classified** low-stock/out-of-stock observations within explicit business/branch scope. It does not compute authoritative stock or decide alert thresholds. **Recorded new tests:** 61. **Recorded commit:** `97e9d0f`. **Remaining:** BE-20 stock classification, other dashboard metrics, authorization and API integration.
 
 ### BE-47 — Sales & Product Performance Reports, Phase 1
 
-`calculate_sales_performance_report()` in [`sales_performance_report.py`](sales_performance_report.py) works with caller-supplied eligible sales lines: exact `Decimal` sales sums, distinct transaction counting while repeated source lines still affect totals, product quantity/value grouping, inclusive date filtering and scope validation. It does **not** invent cancellation/return/net-sales rules, rankings or transaction eligibility. **Recorded new tests:** 195. **Recorded commit:** `90d1c5f`. **Remaining:** real data, approved eligibility/money rules, trusted authorization and final API/report contract.
+`calculate_sales_performance_report()` in [`sales_performance_report.py`](src/branchwise/reports/sales_performance_report.py) works with caller-supplied eligible sales lines: exact `Decimal` sales sums, distinct transaction counting while repeated source lines still affect totals, product quantity/value grouping, inclusive date filtering and scope validation. It does **not** invent cancellation/return/net-sales rules, rankings or transaction eligibility. **Recorded new tests:** 195. **Recorded commit:** `90d1c5f`. **Remaining:** real data, approved eligibility/money rules, trusted authorization and final API/report contract.
 
 #### BE-47 Phase 2 — Daily Sales Performance Breakdown
 
@@ -269,7 +340,7 @@ BE-47 remains **PARTIAL**: trusted data retrieval, authorization, and source com
 
 ### BE-48 — Inventory & Purchase Reports, Phase 1
 
-`summarize_inventory_snapshot()` in [`inventory_snapshot_report.py`](inventory_snapshot_report.py) aggregates **one explicitly identified** business/branch inventory snapshot by product/variant, unit and quantity basis, using exact signed built-in integers. It rejects mixed snapshots and repeated source contribution IDs, without claiming source completeness/non-overlap. **Do not add quantities across different snapshots.** **Recorded new tests:** 116. **Recorded commit:** `242fd6c`. **Remaining:** BE-20 authoritative inventory, BE-31 purchase report contracts, financial valuation policy if applicable, Flask/export and authorization. Purchase calculations were deferred.
+`summarize_inventory_snapshot()` in [`inventory_snapshot_report.py`](src/branchwise/reports/inventory_snapshot_report.py) aggregates **one explicitly identified** business/branch inventory snapshot by product/variant, unit and quantity basis, using exact signed built-in integers. It rejects mixed snapshots and repeated source contribution IDs, without claiming source completeness/non-overlap. **Do not add quantities across different snapshots.** **Recorded new tests:** 116. **Recorded commit:** `242fd6c`. **Remaining:** BE-20 authoritative inventory, BE-31 purchase report contracts, financial valuation policy if applicable, Flask/export and authorization. Purchase calculations were deferred.
 
 #### BE-48 Phase 2 — Inventory Snapshot Contribution Counts
 
@@ -281,11 +352,11 @@ BE-48 remains **PARTIAL**: trusted inventory retrieval, authorization, and sourc
 
 ### BE-49 — Business & Branch Comparison Reports, Phase 1
 
-`prepare_branch_sales_comparison(branch_reports, *, business_id, report_definition_context)` in [`branch_comparison_report.py`](branch_comparison_report.py) prepares **already-computed BE-47 summaries from branches of the same business**, requiring compatible dates/currency/unit/value basis and caller-established report definitions. It preserves `Decimal` representations and counts, returns branch-ordered independent results, and **does not** rank branches, calculate growth/differences or invent missing zero-valued rows. **Recorded new tests:** 155. **Recorded commit:** `e6f0fd6`. **Remaining:** trusted multi-branch RBAC, equivalent data definitions, approved KPIs, inventory snapshot alignment, Flask/export.
+`prepare_branch_sales_comparison(branch_reports, *, business_id, report_definition_context)` in [`branch_comparison_report.py`](src/branchwise/reports/branch_comparison_report.py) prepares **already-computed BE-47 summaries from branches of the same business**, requiring compatible dates/currency/unit/value basis and caller-established report definitions. It preserves `Decimal` representations and counts, returns branch-ordered independent results, and **does not** rank branches, calculate growth/differences or invent missing zero-valued rows. **Recorded new tests:** 155. **Recorded commit:** `e6f0fd6`. **Remaining:** trusted multi-branch RBAC, equivalent data definitions, approved KPIs, inventory snapshot alignment, Flask/export.
 
 ### BE-50 — Report Filtering & Export APIs, Phases 1 and 2
 
-**Phase 1:** [`report_export.py`](report_export.py) implements `export_report_csv(rows, columns)`, returning UTF-8 BOM CSV **bytes** from supplied rows/columns, with selected-field ordering, proper CSV quoting, Arabic/Unicode preservation and protective handling of spreadsheet-formula-like **text**. The function is in-memory, no file, Flask or DB access. The trusted caller must approve selected columns; CSV mitigation is not a substitute for downstream spreadsheet/client review.
+**Phase 1:** [`report_export.py`](src/branchwise/reports/report_export.py) implements `export_report_csv(rows, columns)`, returning UTF-8 BOM CSV **bytes** from supplied rows/columns, with selected-field ordering, proper CSV quoting, Arabic/Unicode preservation and protective handling of spreadsheet-formula-like **text**. The function is in-memory, no file, Flask or DB access. The trusted caller must approve selected columns; CSV mitigation is not a substitute for downstream spreadsheet/client review.
 
 **Phase 2:** extended `_csv_cell()` to accept only **finite `Decimal`** values, serialized with `str(value)`; e.g. `Decimal("12.5000")` exports exactly as `12.5000`, without float conversion or arithmetic. Tests now cover precision, negative zero, exponent form, invalid `NaN`/infinities, input immutability and Decimal-context behavior. Prior tests rejecting Decimal were updated appropriately; other unsupported types remain rejected. **Recorded export tests:** 59 at Phase 1, **69 after Phase 2**. **Recorded Phase 2 commit:** `c46305f`.
 

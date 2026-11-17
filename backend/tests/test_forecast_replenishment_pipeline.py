@@ -10,7 +10,7 @@ import sys
 
 import pytest
 
-from replenishment_service import prepare_replenishment_recommendation
+from branchwise.replenishment.replenishment_service import prepare_replenishment_recommendation
 
 
 START_DATE = "2026-11-01"

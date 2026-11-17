@@ -3,7 +3,7 @@
 import pytest
 from flask import Flask
 
-from supplier_routes import supplier_bp
+from branchwise.suppliers.supplier_routes import supplier_bp
 
 
 @pytest.fixture

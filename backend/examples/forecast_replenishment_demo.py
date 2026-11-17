@@ -4,11 +4,11 @@ from pathlib import Path
 import sys
 
 
-BACKEND_DIRECTORY = Path(__file__).resolve().parents[1]
+BACKEND_DIRECTORY = Path(__file__).resolve().parents[1] / "src"
 if str(BACKEND_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIRECTORY))
 
-from replenishment_service import prepare_replenishment_recommendation
+from branchwise.replenishment.replenishment_service import prepare_replenishment_recommendation
 
 
 BUSINESS_ID = 1

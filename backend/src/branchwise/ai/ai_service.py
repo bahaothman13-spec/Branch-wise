@@ -8,8 +8,8 @@ Provider text is data only. This module has no database access, SQL execution,
 generated-code execution, or business-record modification behavior.
 """
 
-from ai_client import call_ai_provider
-from ai_config import load_ai_config
+from branchwise.ai.ai_client import call_ai_provider
+from branchwise.ai.ai_config import load_ai_config
 
 
 ERROR_MESSAGES = {

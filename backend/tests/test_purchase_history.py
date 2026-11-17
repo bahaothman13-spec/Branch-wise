@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import backend.purchase_history as purchase_history
-from backend.purchase_history import prepare_purchase_history
+import branchwise.purchasing.purchase_history as purchase_history
+from branchwise.purchasing.purchase_history import prepare_purchase_history
 
 
 class IntegerSubclass(int):

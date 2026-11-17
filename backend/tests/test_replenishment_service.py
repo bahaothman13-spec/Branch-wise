@@ -10,8 +10,8 @@ import sys
 
 import pytest
 
-import replenishment_service
-from replenishment_service import prepare_replenishment_recommendation
+import branchwise.replenishment.replenishment_service as replenishment_service
+from branchwise.replenishment.replenishment_service import prepare_replenishment_recommendation
 
 
 def observation(day, quantity):

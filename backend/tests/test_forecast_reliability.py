@@ -9,8 +9,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import forecast_reliability
-from forecast_reliability import get_forecast_availability
+import branchwise.forecasting.forecast_reliability as forecast_reliability
+from branchwise.forecasting.forecast_reliability import get_forecast_availability
 
 
 @pytest.fixture(autouse=True)

@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.transfer_request_validation import validate_transfer_request_input as validate
+from branchwise.transfers.transfer_request_validation import validate_transfer_request_input as validate
 
 
 def request():

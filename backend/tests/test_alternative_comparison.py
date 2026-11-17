@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import alternative_comparison
-from alternative_comparison import prepare_supplier_cost_comparison
+import branchwise.replenishment.alternative_comparison as alternative_comparison
+from branchwise.replenishment.alternative_comparison import prepare_supplier_cost_comparison
 
 
 def observation(**changes):

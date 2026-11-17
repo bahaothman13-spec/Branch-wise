@@ -14,7 +14,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from report_export import export_report_csv
+from branchwise.reports.report_export import export_report_csv
 
 
 @pytest.fixture(autouse=True)

@@ -5,15 +5,15 @@ from pathlib import Path
 import sys
 
 
-BACKEND_DIRECTORY = Path(__file__).resolve().parents[1]
+BACKEND_DIRECTORY = Path(__file__).resolve().parents[1] / "src"
 if str(BACKEND_DIRECTORY) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIRECTORY))
 
 from flask import Flask
 
-from purchase_history import prepare_purchase_history
-from purchase_order_routes import purchase_order_bp
-from purchase_receiving_routes import purchase_receiving_bp
+from branchwise.purchasing.purchase_history import prepare_purchase_history
+from branchwise.purchasing.purchase_order_routes import purchase_order_bp
+from branchwise.purchasing.purchase_receiving_routes import purchase_receiving_bp
 
 
 def _show_request(client, label, path, payload, expected_status):

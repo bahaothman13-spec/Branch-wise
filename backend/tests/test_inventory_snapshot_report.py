@@ -14,8 +14,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import inventory_snapshot_report
-from inventory_snapshot_report import summarize_inventory_snapshot
+import branchwise.reports.inventory_snapshot_report as inventory_snapshot_report
+from branchwise.reports.inventory_snapshot_report import summarize_inventory_snapshot
 
 
 class IntegerSubclass(int):

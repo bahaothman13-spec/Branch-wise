@@ -14,9 +14,9 @@ from unittest.mock import Mock
 
 import pytest
 
-import branch_comparison_report
-from branch_comparison_report import prepare_branch_sales_comparison
-from sales_performance_report import calculate_sales_performance_report
+import branchwise.reports.branch_comparison_report as branch_comparison_report
+from branchwise.reports.branch_comparison_report import prepare_branch_sales_comparison
+from branchwise.reports.sales_performance_report import calculate_sales_performance_report
 
 
 class IntegerSubclass(int):

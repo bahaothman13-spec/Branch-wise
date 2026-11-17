@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.transfer_decision_validation import validate_transfer_decision_input as validate
+from branchwise.transfers.transfer_decision_validation import validate_transfer_decision_input as validate
 
 
 @pytest.mark.parametrize("action", ["approve", "reject"])

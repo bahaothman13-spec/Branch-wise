@@ -6,7 +6,7 @@ from decimal import Decimal, localcontext
 
 import pytest
 
-from backend.purchase_order_validation import validate_purchase_order_input
+from branchwise.purchasing.purchase_order_validation import validate_purchase_order_input
 
 
 def valid_order():

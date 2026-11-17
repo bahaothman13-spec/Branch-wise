@@ -12,8 +12,8 @@ from unittest.mock import Mock
 
 import pytest
 
-import sales_performance_report
-from sales_performance_report import calculate_sales_performance_report
+import branchwise.reports.sales_performance_report as sales_performance_report
+from branchwise.reports.sales_performance_report import calculate_sales_performance_report
 
 
 def observation(**changes):

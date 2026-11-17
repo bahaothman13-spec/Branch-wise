@@ -7,9 +7,9 @@ import re
 import pytest
 from flask import Flask
 from app import app
-from supplier_routes import supplier_bp
-from purchase_order_routes import purchase_order_bp
-from purchase_receiving_routes import purchase_receiving_bp
+from branchwise.suppliers.supplier_routes import supplier_bp
+from branchwise.purchasing.purchase_order_routes import purchase_order_bp
+from branchwise.purchasing.purchase_receiving_routes import purchase_receiving_bp
 
 
 PATH = Path(__file__).resolve().parents[1] / 'postman/BranchWise.postman_collection.json'

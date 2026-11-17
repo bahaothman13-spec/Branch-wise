@@ -8,7 +8,7 @@ from urllib import request
 
 import pytest
 
-from decision_input import prepare_decision_input
+from branchwise.ai.decision_input import prepare_decision_input
 
 
 @pytest.mark.parametrize("decision", ["accepted", "rejected", "deferred"])

@@ -9,9 +9,9 @@ import pytest
 from flask import Flask
 
 import app as main_app
-from purchase_order_routes import purchase_order_bp
-from purchase_receiving_routes import purchase_receiving_bp
-from supplier_routes import supplier_bp
+from branchwise.purchasing.purchase_order_routes import purchase_order_bp
+from branchwise.purchasing.purchase_receiving_routes import purchase_receiving_bp
+from branchwise.suppliers.supplier_routes import supplier_bp
 
 
 @pytest.fixture
@@ -22,6 +22,52 @@ def integrated_client():
     test_app.register_blueprint(purchase_order_bp)
     test_app.register_blueprint(purchase_receiving_bp)
     return test_app.test_client()
+
+
+ROUTE_CASES = (
+    ('/api/suppliers', 'suppliers.create_supplier', {'name': 'Synthetic Supplier'}),
+    ('/api/purchase-orders', 'purchase_orders.create_purchase_order', {
+        'supplier_id': 1, 'branch_id': 2,
+        'items': [{'product_id': 3, 'quantity': 2, 'purchase_cost': '1.25'}],
+    }),
+    ('/api/purchase-receiving', 'purchase_receiving.receive_purchase', {
+        'purchase_order_id': 4,
+        'items': [{'purchase_order_line_id': 5, 'received_quantity': 1}],
+    }),
+)
+
+
+@pytest.mark.parametrize('path,endpoint,payload', ROUTE_CASES)
+def test_combined_app_has_one_post_rule_and_rejects_other_methods(
+    integrated_client, path, endpoint, payload,
+):
+    rules = [r for r in integrated_client.application.url_map.iter_rules()
+             if r.rule == path]
+    assert len(rules) == 1
+    assert rules[0].endpoint == endpoint
+    assert rules[0].methods == {'POST', 'OPTIONS'}
+    for method in ('GET', 'HEAD', 'PUT', 'PATCH', 'DELETE'):
+        response = integrated_client.open(path, method=method, json=payload)
+        assert response.status_code == 405
+        assert set(response.headers['Allow'].replace(' ', '').split(',')) == {
+            'POST', 'OPTIONS',
+        }
+
+
+@pytest.mark.parametrize('path,endpoint,payload', ROUTE_CASES)
+def test_malformed_request_does_not_contaminate_other_blueprints(
+    integrated_client, path, endpoint, payload,
+):
+    # Reuse one client: parsing failure must not leak into another handler.
+    response = integrated_client.post(
+        path, data='{', content_type='application/json',
+    )
+    assert response.status_code == 400
+    assert response.get_json() == {'error': 'Request body must be a JSON object.'}
+    for other_path, _, other_payload in ROUTE_CASES:
+        response = integrated_client.post(other_path, json=other_payload)
+        assert response.status_code == 501
+        assert set(response.get_json()) == {'message'}
 
 
 @pytest.mark.parametrize(
@@ -97,8 +143,9 @@ def test_main_application_keeps_provisional_routes_unregistered():
         ),
     ],
 )
-def test_valid_requests_do_not_attempt_database_or_network_access(
-    integrated_client, monkeypatch, path, payload
+@pytest.mark.parametrize('body_kind', ['valid', 'malformed', 'invalid_fields'])
+def test_requests_do_not_attempt_database_or_network_access(
+    integrated_client, monkeypatch, path, payload, body_kind
 ):
     attempted = Mock(side_effect=AssertionError("External operation attempted"))
     monkeypatch.setattr(sqlite3, "connect", attempted)
@@ -119,7 +166,14 @@ def test_valid_requests_do_not_attempt_database_or_network_access(
 
     monkeypatch.setattr(builtins, "__import__", guarded_import)
 
-    response = integrated_client.post(path, json=payload)
+    if body_kind == 'malformed':
+        response = integrated_client.post(
+            path, data='{', content_type='application/json',
+        )
+    else:
+        response = integrated_client.post(
+            path, json=payload if body_kind == 'valid' else {},
+        )
 
-    assert response.status_code == 501
+    assert response.status_code == (501 if body_kind == 'valid' else 400)
     attempted.assert_not_called()

@@ -9,8 +9,8 @@ import sys
 
 import pytest
 
-import forecast_availability
-from forecast_availability import get_date_aware_forecast_availability
+import branchwise.forecasting.forecast_availability as forecast_availability
+from branchwise.forecasting.forecast_availability import get_date_aware_forecast_availability
 
 
 def observation(day, quantity, **changes):

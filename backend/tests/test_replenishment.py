@@ -11,8 +11,8 @@ from unittest.mock import Mock
 
 import pytest
 
-from demand_forecast import calculate_demand_forecast
-from replenishment import calculate_replenishment
+from branchwise.forecasting.demand_forecast import calculate_demand_forecast
+from branchwise.replenishment.replenishment import calculate_replenishment
 
 
 @pytest.fixture(autouse=True)

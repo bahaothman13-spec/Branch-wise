@@ -5,8 +5,8 @@ authorization, item/branch identity, unit compatibility, or forecast-horizon
 appropriateness. Its caller is responsible for those conditions.
 """
 
-from forecast_availability import get_date_aware_forecast_availability
-from replenishment import calculate_replenishment
+from branchwise.forecasting.forecast_availability import get_date_aware_forecast_availability
+from branchwise.replenishment.replenishment import calculate_replenishment
 
 
 def prepare_replenishment_recommendation(

@@ -5,8 +5,8 @@ from copy import deepcopy
 import pytest
 from flask import Flask
 
-import purchase_order_routes
-from purchase_order_routes import purchase_order_bp
+import branchwise.purchasing.purchase_order_routes as purchase_order_routes
+from branchwise.purchasing.purchase_order_routes import purchase_order_bp
 
 
 @pytest.fixture

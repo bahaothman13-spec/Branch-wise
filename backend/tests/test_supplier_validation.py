@@ -9,7 +9,7 @@ from unittest.mock import Mock
 
 import pytest
 
-from supplier_validation import validate_supplier_input
+from branchwise.suppliers.supplier_validation import validate_supplier_input
 
 
 OPTIONAL_FIELDS = ("contact_person", "phone", "email", "address", "notes")

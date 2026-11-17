@@ -5,8 +5,8 @@ from copy import deepcopy
 import pytest
 from flask import Flask
 
-import purchase_receiving_routes
-from purchase_receiving_routes import purchase_receiving_bp
+import branchwise.purchasing.purchase_receiving_routes as purchase_receiving_routes
+from branchwise.purchasing.purchase_receiving_routes import purchase_receiving_bp
 
 
 @pytest.fixture

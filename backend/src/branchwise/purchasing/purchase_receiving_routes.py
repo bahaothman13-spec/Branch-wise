@@ -6,7 +6,7 @@ Keep unregistered in the main application until trusted integration is ready.
 
 from flask import Blueprint, jsonify, request
 
-from purchase_receiving_validation import validate_purchase_receiving_input
+from branchwise.purchasing.purchase_receiving_validation import validate_purchase_receiving_input
 
 
 purchase_receiving_bp = Blueprint("purchase_receiving", __name__, url_prefix="/api")

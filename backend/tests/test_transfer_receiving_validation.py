@@ -3,7 +3,7 @@ from decimal import Decimal
 
 import pytest
 
-from backend.transfer_receiving_validation import validate_transfer_receiving_input as validate
+from branchwise.transfers.transfer_receiving_validation import validate_transfer_receiving_input as validate
 
 
 def receipt():

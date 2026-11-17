@@ -6,7 +6,7 @@ import sqlite3
 
 import pytest
 
-from sales_history import MAX_SAFE_QUANTITY, prepare_daily_sales_history
+from branchwise.forecasting.sales_history import MAX_SAFE_QUANTITY, prepare_daily_sales_history
 
 
 def observation(day="2026-11-01", quantity=5, business_id=1, branch_id=2, product_variant_id=3):
