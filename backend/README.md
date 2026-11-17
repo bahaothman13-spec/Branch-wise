@@ -10,7 +10,9 @@
 Run these commands from the repository root:
 
 ```powershell
-.\.venv\Scripts\python.exe -m flask --app backend.src.app run
+cd backend
+..\..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m flask --app src.app run
+cd ..
 .\.venv\Scripts\python.exe -m pytest backend
 .\.venv\Scripts\python.exe backend/examples/purchasing_demo.py
 .\.venv\Scripts\python.exe backend/examples/forecast_replenishment_demo.py
@@ -31,7 +33,7 @@ Run these commands from the repository root:
 | BE-46 | `src/branchwise/dashboard/` |
 | BE-47?50 | `src/branchwise/reports/` |
 
-`src/app.py` is the Flask entry point; `src/db.py` is the shared database module.
+`src/app.py` is the Flask entry point; `db.py` is the shared database module.
 See `DEV2_HANDOFF.md` for each task's individual modules and tests.
 
 ---
@@ -51,8 +53,7 @@ python -m pip install -r requirements.txt
 Copy `.env.example` to `.env` and set the database settings for your environment. The `.env` file is ignored by Git. Production must also set `APP_ENV=production`, `SESSION_COOKIE_SECURE=True`, `FLASK_DEBUG=False`, and a randomly generated `SECRET_KEY` of at least 32 bytes. Production startup rejects the in-memory SQLite fallback. Keep real secrets outside version control.
 
 ```powershell
-$env:PYTHONPATH = ".;src"
-flask --app src.app run
+..\..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m flask --app src.app run
 ```
 
 The application factory is `create_app`; the module also exposes `app` for Flask CLI use.
@@ -92,9 +93,9 @@ Flask-Migrate is registered as `flask db`. Database models, migration repository
 ## Integration layout and limitations
 
 Developer 1's working SQLAlchemy configuration is `backend/db.py`.
-`backend/src/db.py` is an empty Developer 2 placeholder; do not use it as the database configuration.
-Both `backend` and `backend/src` must be on the Python import path, with `backend` first.
-From the repository root, set `$env:PYTHONPATH = "backend;backend/src"` before running the commands above.
+The unused empty `backend/src/db.py` placeholder was removed to eliminate module shadowing.
+Run the Flask command above from `backend` using the isolated integration environment.
+No PYTHONPATH or IDE path configuration is required.
 The merged application entry point currently contains Developer 1's routes. Developer 2's
 `src/branchwise/` domain packages remain present, but their HTTP registration must be
 reviewed against `DEV2_HANDOFF.md` and the integration tests before deployment.
