@@ -60,7 +60,7 @@ All 21 assigned main tasks below remain **PARTIAL overall**. The independent sli
 | BE-30 | Receiving validation and provisional 400/501 route | Load authorized order/lines; validate receipt against persisted state; commit receipt, balance, movement and replay result atomically | Receipt repository, source identity, locks and durable idempotency; partial/over-receipt, status and cost policies |
 | BE-31 | Supplier-filterable in-memory purchase history | Authorized paginated history and supplier records backed by real reads | Purchase-history port, stable record/response identities; date/status/cost/filter definitions; do not infer spending from quotes |
 | BE-34 | Structural transfer-request validation; draft-schema SQLAlchemy mappings and internal operation-scoped read adapter | Persistent request creation, authorized service/routes and response mapping | Standalone transfer-history read grant, approved lifecycle/stock decisions, and MySQL verification; reuse Dev1 rules |
-| BE-35 | Structural approval/rejection validation | Authorized decision/dispatch orchestration | Transfer persistence and atomic stock movement; approval/dispatch lifecycle decisions |
+| BE-35 | Structural approval/rejection validation; secure internal decision preparation | Persisted decision orchestration and atomic transaction integration | No persisted APPROVED status; approval/dispatch mapping and transactional persistence policies need confirmation |
 | BE-36 | Structural receipt validation | Receipt/discrepancy orchestration and tests | Atomic receiving adapter; confirm whether outstanding discrepancy permits completion and how settlement works |
 | BE-37 | Structural cancellation validation | Authorized cancellation/replay orchestration | Durable source/movement/replay storage; resolve post-dispatch cancellation against Dev1 transition rules |
 | BE-38 | Config/client/service/Gemini adapter, mocked tests | Trusted service wiring and operational error handling | Approved provider/model configuration, credentials and live validation; no live success inferred |
@@ -1376,3 +1376,33 @@ adds no route or app extension. MySQL DDL compilation and disposable SQLite
 constraints are not live MySQL verification. MySQL 8 ENUM/unsigned enforcement,
 CHECK/FK execution, collation, DATETIME(6), driver behavior, and
 transaction/read-only guarantees remain **UNVERIFIED**.
+
+## BE-35 secure transfer decision preparation
+
+`src/branchwise/transfers/transfer_decision_service.py` exposes the internal
+`prepare_transfer_decision(*, actor, decision_input, repository)` operation.
+It authorizes a trusted Owner or Branch Manager for
+`transfers:approve_source` before calling the existing decision-envelope
+validator or the BE-34 repository. The repository read uses
+`TransferReadPurpose.APPROVE_SOURCE`, which scopes a Manager to the transfer's
+source branch. Foreign-business, missing, and out-of-scope transfers remain
+non-disclosing not-found results.
+
+For a PENDING transfer, rejection is checked with Developer 1's
+`validate_status_transition(PENDING, REJECTED)` rule and returned as a typed
+`PREPARED_NOT_PERSISTED` result with `expected_current_status=PENDING` and
+`target_status=REJECTED`. It is not a persisted rejection or a reservation;
+any future write must re-read and compare the current state inside its own
+transaction. Rejected, cancelled, completed, and IN_TRANSIT transfers are
+blocked from repeated rejection. Approval is explicitly blocked because the
+schema has no APPROVED status and the approval-to-dispatch policy is unresolved;
+no target status is invented and approval never dispatches stock here.
+Persistent atomic decision updates, concurrency/idempotency handling, and
+approval/dispatch policy confirmation remain pending.
+
+The service performs no writes to transfer, balance, or movement tables and is
+not registered as a route or application extension. The focused service suite
+passed (23 tests); the selected BE-34, BE-35, Developer 1 transfer/security,
+session, transaction, and startup regressions passed (758 tests). The full
+backend suite passed: 4,303 tests. The route map remains at 49 routes with no
+transfer route. MySQL-specific behavior remains **UNVERIFIED**.
