@@ -61,7 +61,7 @@ All 21 assigned main tasks below remain **PARTIAL overall**. The independent sli
 | BE-31 | Supplier-filterable in-memory purchase history | Authorized paginated history and supplier records backed by real reads | Purchase-history port, stable record/response identities; date/status/cost/filter definitions; do not infer spending from quotes |
 | BE-34 | Structural transfer-request validation; draft-schema SQLAlchemy mappings and internal operation-scoped read adapter | Persistent request creation, authorized service/routes and response mapping | Standalone transfer-history read grant, approved lifecycle/stock decisions, and MySQL verification; reuse Dev1 rules |
 | BE-35 | Structural approval/rejection validation; secure internal decision preparation | Persisted decision orchestration and atomic transaction integration | No persisted APPROVED status; approval/dispatch mapping and transactional persistence policies need confirmation |
-| BE-36 | Structural receipt validation | Receipt/discrepancy orchestration and tests | Atomic receiving adapter; confirm whether outstanding discrepancy permits completion and how settlement works |
+| BE-36 | Structural receipt validation; secure internal receipt preparation against persisted transfer/items | Persistent receiving, atomic quantity/status updates and inventory effects | Partial-receipt and discrepancy settlement policies; atomic MySQL adapter and integration verification |
 | BE-37 | Structural cancellation validation | Authorized cancellation/replay orchestration | Durable source/movement/replay storage; resolve post-dispatch cancellation against Dev1 transition rules |
 | BE-38 | Config/client/service/Gemini adapter, mocked tests | Trusted service wiring and operational error handling | Approved provider/model configuration, credentials and live validation; no live success inferred |
 | BE-39 | Scoped daily aggregation and missing-day detection | Map trusted sales source to observations with completeness metadata | Sales read contract; cancellation/returns eligibility, timezone, variant mapping and observed-zero policy. Missing days remain missing |
@@ -1406,3 +1406,40 @@ passed (23 tests); the selected BE-34, BE-35, Developer 1 transfer/security,
 session, transaction, and startup regressions passed (758 tests). The full
 backend suite passed: 4,303 tests. The route map remains at 49 routes with no
 transfer route. MySQL-specific behavior remains **UNVERIFIED**.
+
+## BE-36 secure transfer receiving preparation
+
+`src/branchwise/transfers/transfer_receiving_service.py` exposes the internal
+`prepare_transfer_receiving(*, actor, receiving_input, repository)` operation.
+It requires a trusted Owner or Branch Manager with
+`transfers:confirm_receipt` before input validation or protected reads. The
+BE-34 adapter is called with `TransferReadPurpose.CONFIRM_RECEIPT`; Owners are
+limited to their business and Branch Managers to the destination branch.
+Employees, forged sessions/grants, foreign-business records, and inaccessible
+transfers are denied without exposing transfer existence.
+
+Only persisted `IN_TRANSIT` transfers are eligible for preparation. PENDING is
+blocked as not dispatched; COMPLETED, REJECTED, and CANCELLED are not receivable.
+The service validates the full persisted line set, business/parent relations,
+quantity conservation, and transfer variants, then reuses Developer 1's
+`calculate_receipt_quantities` and `calculate_quantity_discrepancies` helpers.
+It prepares only a complete receipt of current in-transit quantities. Partial
+receiving, unresolved discrepancies, and returned/written-off quantity
+resolution are blocked pending approved policy. The result is immutable and
+explicitly not persisted, does not reserve stock, and requires disposition
+before any inventory effect.
+
+This is not a receipt confirmation or concurrency reservation. The service
+does not write transfer/item, branch-inventory, or inventory-movement records
+and is not registered as a production route or app extension. Persistent
+receiving, discrepancy settlement, disposition, atomic status/quantity updates,
+idempotency, and MySQL concurrency behavior remain pending. The draft schema
+and SQLite tests do not establish MySQL behavior; MySQL 8 ENUM/unsigned,
+CHECK/FK, collation, DATETIME(6), driver, locking, and transaction guarantees
+remain **UNVERIFIED**.
+
+The focused BE-36 service tests passed (30 tests); the selected BE-34–37,
+Developer 1 transfer/inventory, authorization/isolation, transaction, session,
+security, startup, and route regressions passed (828 tests). The full backend
+suite passed: 4,333 tests. The Flask route map remains at 49 routes and has no
+transfer route.
