@@ -1,5 +1,9 @@
 # BE-59: Merged backend handoff
 
+Latest BE-31 internal order-detail status: see the final
+"BE-31 - Secure internal Purchase Order Detail Service" section. This single-order
+slice does not complete or authorize a Purchase History collection API.
+
 Latest BE-30 database/read-repository status and verification: see the final
 "BE-30 - Approved receipt mappings and read-only repository foundation" section.
 It supersedes historical BE-30 mapping/repository blockers below.
@@ -1210,3 +1214,133 @@ remain disconnected from persistence. Structural zero-quantity acceptance
 still does not authorize a receipt, and differs from the existing database
 received_qty > 0 constraint. Preparation still verifies no persisted identity
 or eligibility. No production receiving transaction or API has been activated.
+
+### BE-31 - Secure internal Purchase Order Detail Service
+
+**Status as of 2026-11-20: internal single-order detail implemented and tested;
+BE-31 remains PARTIAL. Order detail does not equal Purchase History collection.
+No Purchase History production endpoint is registered.**
+
+Worktree: `BranchWise_INTEGRATION`; branch: `integration/dev1-dev2`;
+starting and current HEAD: `e4300d5`. These changes remain unstaged and
+uncommitted. Historical notes above describe their respective snapshots.
+
+**Files:**
+
+- `src/branchwise/purchasing/purchase_order_detail_service.py` adds the internal
+  operation and frozen `PurchaseOrderDetail` result.
+- `tests/test_purchase_order_detail_service.py` adds 78 tests, reusing BE-29's
+  disposable SQLite fixtures and existing persisted mappings/read adapters.
+- This handoff records the implementation, verification and remaining limits.
+
+The keyword-only typed operation is:
+
+```python
+get_purchase_order_detail(
+    *, actor: AuthenticatedSession, purchase_order_id: int,
+    purchase_order_repository: PurchaseOrderRepository,
+    supplier_repository: SupplierRepository | None = None,
+) -> PurchaseOrderDetail
+```
+
+The immutable result contains `order: PurchaseOrderRecord`,
+`items: tuple[PurchaseOrderItemRecord, ...]`, and
+`supplier: SupplierRecord | None`. These are the existing detached persisted
+records; no history identities, receipt timeline, spending estimates or report
+fields are introduced. Stored `purchase_reference` text, status, timestamps and
+Decimal amounts remain unchanged. Expected cost is not actual received
+spending. No total is recalculated, status generated or reference normalized.
+Empty orders remain valid and existing repository item ordering is preserved.
+
+**Authorization and isolation:** the actor must be an explicitly trusted
+AuthenticatedSession resolved by the existing SessionManager. Session expiry
+and current-account/access-version checks stay in that authentication layer;
+this service does not authenticate a client-supplied session-shaped value.
+It reuses the BE-29 read contract through the existing role/grant/isolation
+helpers: Owners require `purchases:manage`; Branch Managers require
+`purchases:manage_authorized` and their assigned branch; Employees are denied.
+Actor/grant checks precede ID validation and repository calls. The operation
+accepts no separate client business, branch, user, role or grants.
+
+Existing `get_purchase_order` and `list_purchase_order_items` calls receive the
+same trusted actor. The BE-29 adapter derives business/branch predicates from
+that actor and the stored parent order; the service also verifies the returned
+header scope/identity (including a required stored branch for Owners) and every
+item's business/order relationship before any result escapes. Missing,
+foreign-business and unauthorized-branch orders use
+the same non-disclosing RepositoryNotFoundError. Inconsistent typed records or
+line relationships produce generic RepositoryPersistenceError, without partial
+detail or further supplier lookup. No order or line SQL is duplicated.
+
+**Optional supplier enrichment:** injecting a supplier repository requests
+enrichment, but `suppliers:view` must separately be permitted at the verified
+order scope. Without that grant, no supplier lookup/existence check occurs and
+`supplier` is None; the approved supplier ID remains part of the order header.
+Omitting the supplier repository also leaves `supplier` None. Authorized
+enrichment uses only existing `get_supplier(actor=..., supplier_id=...)`, which
+scopes by the trusted business. The returned business and supplier identity
+must match the order. Missing, foreign or inconsistent requested supplier data
+fails the complete detail read with a generic persistence error. Unenriched
+reads rely on the approved supplier FK, as BE-29 does; they do not secretly
+load restricted supplier data. No supplier activity policy is introduced.
+
+**Session and data boundaries:** existing repositories own independent fresh
+read sessions. Active/pending/dirty/deleted caller-owned units of work are
+rejected without flush, commit, rollback or closure by the service. Only SELECT
+statements are emitted during successful reads. Composition does not establish
+a shared transaction snapshot, locking or database-enforced read-only mode.
+No existing model/repository, physical table, migration, persistent data,
+application factory, route or production installer was changed.
+
+The provisional `purchase_history.py` helper is unchanged. Its synthetic
+`purchase_order_reference` envelope and nonblank reference requirement differ
+from approved persisted detail, so the new service returns the existing
+`purchase_reference` field directly, including SQL-valid blank text.
+
+**Executed verification in isolated `BranchWise_INTEGRATION_VENV`:**
+
+- New order-detail suite: **78 passed** in 5.86 seconds. Covers Owner/Manager
+  scope, Employee/forged-grant denial before access, malformed IDs, concealed
+  missing/inaccessible orders, zero/multiple lines, poisoned adapter records,
+  separate supplier grants, foreign/missing supplier relationships, preserved
+  references/statuses/Decimal context, immutable detached results, independent
+  closed sessions, SELECT-only reads, unchanged table snapshots, later read
+  failures, caller-owned work preservation and blocked network operations.
+- Existing targeted regressions: **682 passed** in 20.38 seconds: all **132**
+  BE-31 tests; **135** BE-29 repository tests; **168** BE-30 repository tests;
+  **53** supplier repository tests; **115** permissions, **20** isolation,
+  **42** session-auth and **17** shared repository-contract tests.
+- Full backend suite on final code: **4,268 passed** in 60.13 seconds, comprising
+  the **4,190** baseline plus **78** new tests.
+- Flask route map: **49 rules**, exactly unchanged before/after importing the
+  service; no purchasing endpoint. Production startup/routes are unchanged.
+- `git diff --check` and separate new-file whitespace/syntax checks passed.
+  `git status -sb` shows only this modified handoff and the two new Python files;
+  nothing is staged or committed. HEAD remains `e4300d5`.
+
+Tests used `PYTHONDONTWRITEBYTECODE=1`, `-p no:cacheprovider`, repository
+`backend/pytest.ini` and unique explicit system-temp basetemp directories named
+`branchwise-be31-detail-*`, `branchwise-be31-detail-regressions-*` and
+`branchwise-be31-detail-full-*`. The full-suite command was:
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE='1'
+$be31Temp = Join-Path ([System.IO.Path]::GetTempPath()) ('branchwise-be31-detail-full-' + [guid]::NewGuid().ToString('N'))
+..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m pytest -c backend/pytest.ini backend -q -p no:cacheprovider --basetemp $be31Temp
+```
+
+All database checks used disposable SQLite files with copied test metadata and
+FK enforcement; deliberately broken supplier links were confined to those
+fixtures. No shared database was accessed or altered. Live MySQL Decimal
+driver behavior, unsigned/range/ENUM enforcement, collation, DATETIME(6), actual
+CHECK/FK execution, transaction isolation/concurrency and database-enforced
+read-only guarantees remain **UNVERIFIED**. SQLite and existing static MySQL DDL
+compilation do not establish those properties.
+
+**Remaining BE-31 blockers:** general Purchase History read permissions,
+collection granularity/identities, ordering/tie-breakers, pagination/limits,
+status/date/filter semantics, response fields, supplier historical snapshots,
+source completeness/snapshot guarantees and production security/repository/API
+wiring remain unapproved or incomplete. Existing purchasing read authorization
+is reused only for this single-order service; no new general BE-31 history-view
+grant is inferred. Receipt costs and received-spending calculations are absent.
