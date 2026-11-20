@@ -62,7 +62,7 @@ All 21 assigned main tasks below remain **PARTIAL overall**. The independent sli
 | BE-34 | Structural transfer-request validation; draft-schema SQLAlchemy mappings and internal operation-scoped read adapter | Persistent request creation, authorized service/routes and response mapping | Standalone transfer-history read grant, approved lifecycle/stock decisions, and MySQL verification; reuse Dev1 rules |
 | BE-35 | Structural approval/rejection validation; secure internal decision preparation | Persisted decision orchestration and atomic transaction integration | No persisted APPROVED status; approval/dispatch mapping and transactional persistence policies need confirmation |
 | BE-36 | Structural receipt validation; secure internal receipt preparation against persisted transfer/items | Persistent receiving, atomic quantity/status updates and inventory effects | Partial-receipt and discrepancy settlement policies; atomic MySQL adapter and integration verification |
-| BE-37 | Structural cancellation validation | Authorized cancellation/replay orchestration | Durable source/movement/replay storage; resolve post-dispatch cancellation against Dev1 transition rules |
+| BE-37 | Structural cancellation validation; internal lifecycle-only eligibility helper | Authorized cancellation and persistence orchestration | No approved transfer-cancellation grant; resolve post-dispatch reversal/audit policy and transactional revalidation |
 | BE-38 | Config/client/service/Gemini adapter, mocked tests | Trusted service wiring and operational error handling | Approved provider/model configuration, credentials and live validation; no live success inferred |
 | BE-39 | Scoped daily aggregation and missing-day detection | Map trusted sales source to observations with completeness metadata | Sales read contract; cancellation/returns eligibility, timezone, variant mapping and observed-zero policy. Missing days remain missing |
 | BE-40 | Moving-average calculation and zero-demand regression fix | Authorized forecasting endpoint/service using BE-39/45 | Trusted sales adapter; approve horizon/window, response and access contracts; algorithm exists already |
@@ -1443,3 +1443,40 @@ Developer 1 transfer/inventory, authorization/isolation, transaction, session,
 security, startup, and route regressions passed (828 tests). The full backend
 suite passed: 4,333 tests. The Flask route map remains at 49 routes and has no
 transfer route.
+
+## BE-37 stock-transfer cancellation eligibility
+
+`src/branchwise/transfers/transfer_cancellation_service.py` keeps the pure
+`evaluate_transfer_cancellation_eligibility(*, cancellation_input, transfer)`
+helper separate from authorization. It reuses the BE-37 structural validator
+and Developer 1's `validate_status_transition` rule. PENDING -> CANCELLED is
+the only existing allowed cancellation transition. IN_TRANSIT is blocked
+because the lifecycle rules do not allow cancellation after dispatch and no
+transfer-stock reversal policy is defined. COMPLETED and REJECTED are terminal;
+CANCELLED is blocked as an already-cancelled state. Unknown or malformed
+persisted statuses fail closed.
+
+The helper only evaluates lifecycle eligibility from an already loaded,
+trusted record; possession of that record does not grant authorization. Its
+immutable result explicitly sets cancellation authorization, persistence, and
+authority to false. The service-shaped
+`prepare_transfer_cancellation(*, actor, cancellation_input, repository)`
+entrypoint always denies before input validation or repository access. This is
+intentional: the permission matrix has no transfer-cancellation grant, and
+`transfers:request`, `transfers:approve_source`, and `transfers:dispatch` are
+not substitutes. No permission or repository read purpose was added.
+
+No cancellation or inventory changes are persisted, no reversal is planned,
+and no production route is registered. Actual cancellation remains blocked
+pending a trusted role/branch authorization contract; a decision on whether
+the existing `closed_at`/`event_history_json` fields provide sufficient
+cancellation actor, time, and reason audit data; transactional locks and
+current-state revalidation; and explicit post-dispatch stock resolution
+rules. The repaired schema is still a draft and has not been verified on
+MySQL 8.
+
+The BE-37 service and existing validation tests passed (128 tests). The
+selected BE-34–37 service/repository, Developer 1 transfer/inventory,
+authorization/isolation, transaction, session, security, and startup
+regressions passed (890 tests). The full backend suite passed: 4,362 tests.
+The Flask route map remains at 49 routes with no transfer route.
