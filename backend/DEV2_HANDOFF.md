@@ -1,5 +1,9 @@
 # BE-59: Merged backend handoff
 
+Latest BE-30 database/read-repository status and verification: see the final
+"BE-30 - Approved receipt mappings and read-only repository foundation" section.
+It supersedes historical BE-30 mapping/repository blockers below.
+
 Verified snapshot: 2026-11-17, worktree `BranchWise_INTEGRATION`, branch `integration/dev1-dev2`, HEAD `d399b7e` (BE-58 startup fix), following merge `92f53cd`. This section supersedes the historical handoff below; historical branch names, paths, counts and statuses describe earlier snapshots only.
 
 ## Completion boundaries
@@ -1057,3 +1061,152 @@ other reference uniqueness behavior under utf8mb4_0900_ai_ci; DATETIME(6)
 defaults/ON UPDATE; actual MySQL ROUND/CHECK/FK enforcement; Connector/Python
 Decimal round trips; concurrent uniqueness and MySQL transaction/isolation
 behavior. SQLite and compiled DDL checks do not establish these properties.
+### BE-30 - Approved receipt mappings and read-only repository foundation
+
+**Status as of 2026-11-20: database mappings and scoped read foundation
+implemented; BE-30 remains PARTIAL. No production receiving transaction or API
+has been activated. Persistent receiving remains incomplete.**
+
+Worktree: `BranchWise_INTEGRATION`; branch: `integration/dev1-dev2`;
+starting and current HEAD: `092a706`. Work remains unstaged and uncommitted.
+The final original `C:/Users/bahao/Downloads/BranchWise database.sql`, receipt
+DDL at lines 469-540, was inspected alongside the existing BE-29 mappings,
+repository/contracts, BE-30 preparation/validation, shared repository errors,
+transaction and inventory rules. The repaired DRAFT was not used. The approved
+existing design is preserved; no physical application tables, migrations,
+shared database changes or inventory operations were introduced.
+
+**Mappings:** `src/branchwise/purchasing/purchase_receiving_model.py` registers
+only `purchase_receipts` and `purchase_receipt_items` in existing `db.metadata`.
+It imports the existing purchase-order mappings without redefining their tables
+and reuses the existing identifier/timestamp type conventions.
+
+- `purchase_receipts`: unsigned auto-increment BIGINT primary ID; required
+  unsigned business/order/receiving-user IDs; required receipt_reference
+  VARCHAR(40), request_key VARCHAR(120) and DATETIME(6) received_at with
+  CURRENT_TIMESTAMP(6) default; nullable notes VARCHAR(500). Exact named unique
+  keys preserve (business_id, id), (business_id, receipt_reference) and
+  (business_id, request_key). The approved index is
+  (business_id, purchase_order_id, received_at). FKs reference businesses
+  directly and purchase_orders/users through composite (business_id, id) keys.
+- `purchase_receipt_items`: unsigned auto-increment BIGINT primary ID; required
+  unsigned business/receipt/PO-item IDs and INT UNSIGNED received_qty. Exact
+  named constraints preserve received_qty > 0, unique (business_id, id), unique
+  (purchase_receipt_id, purchase_order_item_id), the direct business FK, and
+  composite business/receipt and business/PO-item FKs. No extra index is added.
+- Both preserve approved names, nullability, InnoDB, utf8mb4,
+  utf8mb4_0900_ai_ci and the absence of cascading delete/update policies.
+  Importing mappings executes no connection, reflection, DDL or installation.
+
+**Contracts and read operations:**
+
+`purchase_receiving_contracts.py` provides the typed PurchaseReceivingRepository
+port and frozen detached PurchaseReceiptRecord/PurchaseReceiptItemRecord values.
+The header includes purchase_order_id, business_id and branch_id; branch_id is
+loaded from the associated stored purchase order and is not a new receipt
+column. These values provide safe access to the order identity and destination.
+
+`purchase_receiving_repository.py` provides
+SQLAlchemyPurchaseReceivingRepository(session_factory), implementing:
+
+- `get_purchase_receipt(actor=..., receipt_id=...)`
+- `get_purchase_receipt_item(actor=..., receipt_id=..., item_id=...)`
+- `list_purchase_receipt_items(actor=..., receipt_id=...)`
+
+Lists return an immutable tuple ordered by receipt-item ID. An accessible empty
+receipt returns (); missing/inaccessible receipts and missing/inaccessible
+lines use the shared RepositoryNotFoundError convention without foreign data.
+Malformed IDs raise ValueError before any database session is opened.
+
+**Security and relationship checks:** a server-resolved AuthenticatedSession is
+required. Existing purchasing grants apply: Owners need purchases:manage;
+Branch Managers need purchases:manage_authorized and their assigned destination
+branch; Employees are denied even with forged grants. Authorization precedes
+ID validation and database access. Business scope is always taken from the
+trusted principal. Both queries join the receipt to its PO by business and PO
+identity and enforce the trusted business and, for managers, stored PO branch.
+No client-submitted business, branch, PO identity, user or grants can authorize
+a receipt lookup. Session expiry/current-account checks remain in the existing
+authentication layer; there is no new HTTP integration.
+
+**Confirmed schema gap:** the separate composite FKs on receipt items ensure
+business membership, but do not ensure that the referenced PO item belongs to
+the parent receipt's purchase order. A same-business wrong-PO line can satisfy
+all approved database constraints. The adapter therefore verifies ALL lines
+of an authorized receipt before returning a header, individual line or list.
+An outer join keeps unresolved/foreign-business PO-item links observable; it
+never silently filters a wrong-PO line to produce a partial result. A wrong-PO
+or unresolved linked item raises generic RepositoryPersistenceError, with no
+partial receipt returned. Tests demonstrate the real same-business schema gap
+with foreign keys enabled. No physical constraint was added or modified.
+
+Each read owns and closes a fresh idle SQLAlchemy Session/transaction from the
+injected factory. Active or pending caller units of work are rejected without
+flushing, committing, rolling back or closing them. Only SELECT statements are
+emitted; results escape after successful transaction exit. SQLAlchemy failures
+become generic RepositoryPersistenceError with exception chaining suppressed.
+There is no shared db.session wiring, creation/update/delete method, status
+transition, stock movement, receipt/reference/key generator or locking claim.
+
+**Executed verification in isolated `BranchWise_INTEGRATION_VENV`:**
+
+- New `tests/test_purchase_receiving_repository.py`: **168 passed**. Covers
+  exact mapping/DDL/default/index/FK shapes; immutable independent-session
+  retrieval and stored destination; business/branch isolation, missing and
+  malformed IDs, role/grant rejection before I/O; unique receipt references
+  and request keys, duplicate receipt lines, positive quantity, non-null and
+  business-scoped FKs; wrong-PO lines from the same/different destination;
+  deliberately corrupted unresolved/foreign links in disposable fixtures;
+  safe query/factory/transaction-exit errors, rollback and session closure;
+  caller active/pending/dirty/deleted work preservation; SELECT-only reads and
+  unchanged parent/inventory sentinel tables; unchanged preparation and lack
+  of production installation. Distinct receipts may reference the same PO
+  line; the adapter invents no partial/over-receiving or lifecycle policy.
+- Existing BE-30 validation/service/provisional routes: **366 passed**.
+- BE-29 repository/validation/service/provisional routes: **474 passed**,
+  including all **135** repository regressions.
+- Full backend suite: **4,190 passed** in 70.58 seconds, comprising the
+  **4,022** baseline plus **168** new tests.
+- Flask route count remains **49**, matching the pre-change inspection;
+  production startup and route Python files are unchanged from HEAD. No
+  purchasing/receiving endpoint or repository/auth installer was registered.
+- `git diff --check` and whitespace checks including the four untracked Python
+  files passed. Changes remain limited to those four files and this handoff.
+
+All tests used `PYTHONDONTWRITEBYTECODE=1`, `-p no:cacheprovider`, repository
+`backend/pytest.ini` and explicit system-temp `--basetemp` directories:
+`branchwise-be30-repository-fixed-20261120`,
+`branchwise-be30-existing-20261120`, `branchwise-be30-po-regressions-20261120`
+and `branchwise-be30-full-20261120`. The complete suite command was:
+
+```powershell
+$env:PYTHONDONTWRITEBYTECODE='1'
+..\BranchWise_INTEGRATION_VENV\Scripts\python.exe -m pytest -c backend/pytest.ini backend -q -p no:cacheprovider --basetemp "$env:TEMP\branchwise-be30-full-20261120"
+```
+
+New database integration tests use disposable SQLite files with FK enforcement,
+private parent/sentinel tables and portable timestamp defaults on COPIES of the
+mappings. They never create application tables in a shared/existing database.
+MySQL DDL compilation is static coverage only. **Live MySQL unsigned/range and
+VARCHAR length enforcement, reference/request-key uniqueness under
+utf8mb4_0900_ai_ci, DATETIME(6) defaults/precision, actual MySQL CHECK/FK
+execution and transaction/isolation/concurrency behavior remain UNVERIFIED.**
+SQLite timestamp round trips do not verify MySQL behavior.
+
+**Remaining BE-30 blockers:** approved orchestration against persisted PO and
+line state; remaining receivable quantities and partial/over-receipt,
+discrepancy/disposition/cost and lifecycle policies; receipt/reference allocation;
+atomic persistence of receipt/lines, authoritative stock and append-only
+movements with stable locks/revalidation; durable idempotency/replay outcomes,
+payload-conflict handling and retries; disposable live MySQL verification;
+production session/grant/repository wiring and an approved API contract. The
+header's unique request_key alone does not implement the transaction safety
+contract's payload identity, in-progress state or committed-result replay.
+The schema's PO-line relationship gap remains and must also be addressed by
+any future write boundary; this read guard is not a write integrity guarantee.
+
+The existing BE-30 validation/service and provisional routes are unchanged and
+remain disconnected from persistence. Structural zero-quantity acceptance
+still does not authorize a receipt, and differs from the existing database
+received_qty > 0 constraint. Preparation still verifies no persisted identity
+or eligibility. No production receiving transaction or API has been activated.
