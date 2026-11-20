@@ -59,7 +59,7 @@ All 21 assigned main tasks below remain **PARTIAL overall**. The independent sli
 | BE-29 | PO validation, exact costs, provisional 400/501 route | Scoped supplier/branch/catalog lookups; atomic PO creation/update and response mapping | PO/line contract and adapter; reference uniqueness, duplicate-line and product/variant rules. Creating a PO must not mutate inventory |
 | BE-30 | Receiving validation and provisional 400/501 route | Load authorized order/lines; validate receipt against persisted state; commit receipt, balance, movement and replay result atomically | Receipt repository, source identity, locks and durable idempotency; partial/over-receipt, status and cost policies |
 | BE-31 | Supplier-filterable in-memory purchase history | Authorized paginated history and supplier records backed by real reads | Purchase-history port, stable record/response identities; date/status/cost/filter definitions; do not infer spending from quotes |
-| BE-34 | Structural transfer-request validation | Scoped request service/routes and persistence | Transfer repository/schema, approved source/destination and stock rules; reuse Dev1 rules |
+| BE-34 | Structural transfer-request validation; draft-schema SQLAlchemy mappings and internal operation-scoped read adapter | Persistent request creation, authorized service/routes and response mapping | Standalone transfer-history read grant, approved lifecycle/stock decisions, and MySQL verification; reuse Dev1 rules |
 | BE-35 | Structural approval/rejection validation | Authorized decision/dispatch orchestration | Transfer persistence and atomic stock movement; approval/dispatch lifecycle decisions |
 | BE-36 | Structural receipt validation | Receipt/discrepancy orchestration and tests | Atomic receiving adapter; confirm whether outstanding discrepancy permits completion and how settlement works |
 | BE-37 | Structural cancellation validation | Authorized cancellation/replay orchestration | Durable source/movement/replay storage; resolve post-dispatch cancellation against Dev1 transition rules |
@@ -1344,3 +1344,35 @@ source completeness/snapshot guarantees and production security/repository/API
 wiring remain unapproved or incomplete. Existing purchasing read authorization
 is reused only for this single-order service; no new general BE-31 history-view
 grant is inferred. Receipt costs and received-spending calculations are absent.
+
+## BE-34 internal stock-transfer read adapter
+
+The internal SQLAlchemy mappings in `src/branchwise/transfers/stock_transfer_model.py`
+map only the `stock_transfers` and `stock_transfer_items` tables from
+`schema/BranchWise_database_repaired_DRAFT.sql`, using shared `db.metadata`.
+Importing the mappings does not execute DDL, migrations, or database access.
+The draft schema has not been executed on MySQL 8.
+
+`SQLAlchemyStockTransferRepository` provides SELECT-only operations to retrieve
+one transfer, retrieve one item, and list a transfer's items. It derives
+business and branch scope from a trusted `AuthenticatedSession`, checks both
+branch records against the transfer business, validates the item-parent
+relationship, and returns frozen detached records. Owner reads are limited to
+the owner's business. Branch Managers must hold the operation grant at the
+relevant side: source for approval/dispatch, destination for receipt. Employees
+are denied even if a forged grant is present.
+
+There is no general transfer-history view permission. The internal repository
+requires an explicit approval, dispatch, or receipt purpose; request grants are
+not accepted as a read purpose. No route, production API, or app extension
+installs this adapter. This does not implement transfer creation, approval,
+dispatch, receiving, cancellation, or inventory mutation.
+
+The focused SQLite repository suite passed (12 tests); the selected BE-34–37,
+Developer 1 inventory, authorization/isolation, transaction-safety, session,
+startup, and route-map regressions passed (736 tests). The full backend suite
+passed: 4,280 tests. The route-map test still reports 49 routes; this adapter
+adds no route or app extension. MySQL DDL compilation and disposable SQLite
+constraints are not live MySQL verification. MySQL 8 ENUM/unsigned enforcement,
+CHECK/FK execution, collation, DATETIME(6), driver behavior, and
+transaction/read-only guarantees remain **UNVERIFIED**.
