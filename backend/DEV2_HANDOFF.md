@@ -281,7 +281,20 @@ The provider is trusted application code, never user-supplied executable input. 
 
 The generic service returns error codes including `AI_INVALID_INPUT`, `AI_CONFIG_ERROR`, `AI_NOT_CONFIGURED`, `AI_TIMEOUT`, `AI_CONNECTION_ERROR`, `AI_PROVIDER_ERROR`, and `AI_INVALID_OUTPUT`. The errors should remain safe; do not print API keys or provider exception details.
 
-**Remaining:** authorized credentials/live model verification, trusted business context, Flask routes, RBAC, quotas/timeouts/fallback policy, operational/security tests. **BE-38 is PARTIAL.**
+The integration and BE-39–45 regression selection passed (783 tests); the full
+backend suite passed (4,362 tests). Flask startup/route verification remains at
+49 routes, with no AI endpoint. No AI source changes were needed in this
+verification.
+
+`load_ai_config()` reads process environment settings. Normal Flask app startup
+loads `backend/.env`, while `backend/.env.example` currently does not list the
+AI variables; deployments must supply them through an approved secret/config
+mechanism. This verification used fake test credentials and a mocked SDK; it
+made no live Gemini calls.
+
+**Remaining:** authorized credentials/live model verification, trusted
+business context, Flask routes, RBAC, quotas/timeouts/fallback policy, and
+operational/security review. **BE-38 is PARTIAL.**
 
 ### BE-39 — Historical Sales Data Preparation, Phase 1
 
