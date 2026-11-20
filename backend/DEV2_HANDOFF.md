@@ -906,3 +906,154 @@ contracts and installation of persistent authentication/session/user-loader
 adapters. No supplier repository installer or production factory wiring was
 added. The existing unprotected provisional supplier Blueprint remains
 unregistered. BE-28 remains PARTIAL; no production Supplier API is enabled.
+
+
+### BE-29 - Approved purchase-order mappings and read-only repository foundation
+
+**Status: database mappings and scoped read foundation implemented; BE-29 remains
+PARTIAL. Atomic creation and production API integration remain blocked.**
+
+The database owner has confirmed the original supplied
+`C:/Users/bahao/Downloads/BranchWise database.sql` as the final intended design.
+This confirmation supersedes the earlier schema-approval caveats above for that
+original design. The repaired DRAFT was not used. Only the original DDL was
+read; its unrelated incomplete definitions were not executed. No migration,
+physical schema change, shared database access or inventory change was made.
+
+**Approved existing physical schema (original SQL lines 367-464):**
+
+- `purchase_orders`: unsigned auto-increment BIGINT primary ID; required unsigned
+  business, branch, supplier and ordering-user IDs; required purchase reference
+  VARCHAR(40), unique per business; required ENUM status PENDING,
+  PARTIALLY_RECEIVED or RECEIVED, default PENDING; required DATETIME(6) ordered_at,
+  created_at and updated_at with database timestamp defaults and ON UPDATE for
+  updated_at; required nonnegative expected_total_cost DECIMAL(14,2).
+  Named business/id and business/reference unique keys and both approved
+  business/branch/time/status and business/supplier/time indexes are mapped.
+  Foreign keys reference businesses directly and branches, suppliers and users
+  through their composite (business_id, id) keys.
+- `purchase_order_items`: required unsigned auto-increment BIGINT primary ID,
+  business/order/variant IDs and INT UNSIGNED ordered_qty; required
+  DECIMAL(14,2) unit_cost and line_total. The approved named constraints enforce
+  positive quantity, nonnegative unit cost,
+  line_total = ROUND(ordered_qty * unit_cost, 2), unique (business_id, id) and
+  unique (purchase_order_id, variant_id). The business/variant index and direct
+  business FK plus composite business/order and business/variant FKs are mapped.
+- Both mappings preserve InnoDB, utf8mb4 and utf8mb4_0900_ai_ci, exact constraint
+  names, nullability and default behavior. No cascade policy was added.
+
+**Files and operations:**
+
+- `src/branchwise/purchasing/purchase_order_model.py` adds SQLAlchemy Core
+  `purchase_orders` and `purchase_order_items` mappings using existing
+  `db.metadata` and the supplier mapping's identifier/timestamp conventions.
+  Parent FK strings reference existing tables; there are no competing partial
+  parent models, new engines, reflection or import-time database operations.
+- `purchase_order_contracts.py` adds the typed read-only PurchaseOrderRepository
+  protocol, PurchaseOrderStatus literal and frozen detached PurchaseOrderRecord
+  and PurchaseOrderItemRecord values. Monetary fields are Decimal.
+- `purchase_order_repository.py` adds
+  SQLAlchemyPurchaseOrderRepository(session_factory) with
+  `get_purchase_order(actor=..., purchase_order_id=...)`,
+  `get_purchase_order_item(actor=..., purchase_order_id=..., item_id=...)` and
+  `list_purchase_order_items(actor=..., purchase_order_id=...)`.
+  Lists return an immutable tuple ordered by item ID. An accessible empty order
+  returns (); an absent or inaccessible parent raises safe not-found.
+- `tests/test_purchase_order_repository.py` exercises the mappings, repository
+  and database constraints against disposable SQLite files; MySQL compilation
+  checks are static only.
+
+Each read authorizes a server-resolved AuthenticatedSession before opening a
+session. It reuses the existing isolation/role/grant helpers used by BE-29
+preparation: Owners require purchases:manage; Branch Managers require
+purchases:manage_authorized and are limited to their assigned branch; Employees
+are denied even with forged purchasing grants. All queries derive business_id
+from the trusted principal. Item reads additionally join the parent using both
+business and order IDs and apply the parent's authorized branch predicate.
+Foreign-business, foreign-branch, mismatched-parent and absent IDs cannot return
+records. Missing and inaccessible resources have identical not-found behavior.
+Malformed IDs fail before opening a session. Database failures become generic
+RepositoryPersistenceError messages with SQL exception chaining suppressed.
+
+The adapter follows the supplier session-ownership convention: inject a factory
+returning a fresh idle SQLAlchemy Session, for example sessionmaker(bind=db.engine)
+inside an application context. Each read owns and closes its session/transaction;
+the result escapes only after successful transaction exit. Failed query and
+transaction-exit paths roll back. A caller-owned active/pending unit of work is
+rejected without committing, rolling back or closing it. Reads emit SELECT only.
+No shared db.session is accepted as a caller-owned transaction. Detached results
+contain no RowMapping, session, ORM instance or database exception.
+
+The mappings use DECIMAL(14,2, asdecimal=True); no application float conversion,
+price inference or total recomputation is introduced. Exact stored cents from
+0.00 through 999999999999.99 are covered, including low caller Decimal precision
+and unchanged Decimal context flags. SQLite's numeric storage is not MySQL
+fixed-point enforcement; these tests do not approve extra-scale input handling.
+
+**Atomic creation is intentionally unsupported.** The existing secure
+prepare_purchase_order_input service and provisional validation/routes are
+unchanged. Preparation still returns preliminary errors only and verifies no
+supplier/catalog existence or authoritative prices. Its successful result is
+not a creation command. For example, product-only lines and costs with more than
+two decimal places can pass preliminary validation but cannot yet establish an
+approved database write. No create, update, delete, status transition or receiving
+write method is exposed by this repository.
+
+Remaining decisions before creation/production integration:
+
+- Authoritative purchase-cost source and whether/how a submitted purchase_cost
+  participates; supplier/branch/catalog existence and activity eligibility.
+- Product-only input to variant resolution and product/variant compatibility.
+  The approved physical table always requires variant_id. Duplicate variants
+  are already forbidden by the database; any input consolidation policy needs
+  an explicit decision rather than silently merging lines.
+- Purchase-reference allocation/format, concurrent uniqueness handling and retry
+  behavior. VARCHAR(40) and per-business uniqueness alone do not specify a
+  generator.
+- Monetary scale validation versus rounding, rounding mode/stage, overflow
+  handling and authoritative header-total calculation. The approved line CHECK
+  does not define application handling of overprecision or enforce a header sum.
+- Atomic creation command boundaries, revalidation/locking and creation
+  idempotency/retry policy. Existing transaction_safety_rules cover receiving
+  and other inventory/sales operations; they define no purchase-order creation
+  operation. This foundation adopts read-session ownership only and invents no
+  write transaction policy.
+- Lifecycle/receiving transitions and concurrency, isolated live MySQL checks,
+  approved production authentication/session/grant wiring and API contract.
+
+**Production registration remains unchanged:** no installer/factory wiring or
+production Purchase Order endpoint was added. The provisional Purchase Order
+Blueprint remains unregistered. Session resolution, expiry/current-account
+checks and future HTTP CSRF checks remain with the established authentication
+layer. Existing BE-29 preparation keeps its onboarding readiness checks; read
+lookups do not create orders or replace those checks.
+
+**Verification (isolated BranchWise_INTEGRATION_VENV):**
+
+- New repository suite: **135 passed**. Covers exact mappings/defaults/indexes,
+  supported stored statuses, independent-session retrieval, immutable records,
+  same-business lookups, manager branch restriction, cross-business and
+  mismatched-parent isolation, Decimal boundaries/context, invalid IDs/FKs,
+  unique references/duplicate variant lines, non-null/check constraints,
+  rollback of a test-seeded header/lines transaction on duplicate lines,
+  query/transaction-exit rollback and session closure, caller transaction
+  preservation, authorization before session access, SELECT-only behavior and
+  unchanged parent/inventory sentinel tables. The test-seeded rollback checks
+  database atomicity; it does not claim a supported repository creation method.
+- Existing Purchase Order validation/service/provisional routes: **339 passed**.
+- Supplier repository/service/validation/provisional routes: **144 passed**.
+- Full backend suite: **4,022 passed** (3,887 baseline plus 135 new tests).
+- Exact Flask route comparison against the pre-change snapshot: **49 rules,
+  unchanged**, including endpoints and methods; no Purchase Order endpoint.
+- All databases used for new integration tests were disposable SQLite files
+  under explicit --basetemp directories in the system temporary directory.
+  Tests ran with PYTHONDONTWRITEBYTECODE=1 and -p no:cacheprovider.
+- git diff --check: passed, including a separate check of new untracked files. Work remains unstaged and uncommitted on
+  integration/dev1-dev2 at a34be9a; original developer branches were untouched.
+
+**Requires separate disposable MySQL verification:** live unsigned/ENUM/range
+and DECIMAL precision/scale behavior; VARCHAR(40) enforcement; case/accent and
+other reference uniqueness behavior under utf8mb4_0900_ai_ci; DATETIME(6)
+defaults/ON UPDATE; actual MySQL ROUND/CHECK/FK enforcement; Connector/Python
+Decimal round trips; concurrent uniqueness and MySQL transaction/isolation
+behavior. SQLite and compiled DDL checks do not establish these properties.
