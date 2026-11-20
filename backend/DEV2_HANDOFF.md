@@ -803,3 +803,106 @@ BE-54 provisional integration. Full merged backend suite: **3,834 passed**
 outside the worktree. The main Flask route map matches HEAD exactly:
 **49 rules**, with no receiving endpoint (404). The receiving validator function
 and provisional route handler ASTs match HEAD exactly. Whitespace checks passed.
+
+### BE-28 - Candidate supplier persistence adapter against supplied SQL
+
+**Status: CANDIDATE integration implementation; not production ready.** The
+original supplied SQL at C:/Users/bahao/Downloads/BranchWise database.sql,
+lines 336-362, was inspected. Its supplier definition is identical in the
+repaired DRAFT, but final schema-owner approval remains unconfirmed. The
+proposed inventory tables/policies in that DRAFT are not accepted by this work.
+
+**Verified supplied supplier DDL:** unsigned auto-increment BIGINT primary ID,
+required unsigned business ID, required name VARCHAR(160), nullable
+contact_person VARCHAR(160), phone VARCHAR(30), email VARCHAR(254),
+address VARCHAR(255) and notes TEXT; non-null active flag defaulting to 1;
+non-null DATETIME(6) timestamps with server creation/update defaults.
+Named unique keys are uq_suppliers_bid_id (business_id, id) and
+uq_suppliers_name (business_id, name), with ck_suppliers_name checking a
+nonblank trimmed name and fk_suppliers_business_id referencing businesses.id.
+Table engine/encoding/collation are InnoDB/utf8mb4/utf8mb4_0900_ai_ci.
+
+**Implementation:**
+
+- src/branchwise/suppliers/supplier_model.py: SQLAlchemy Core suppliers
+  mapping using the existing db.metadata, with MySQL unsigned identifiers,
+  microsecond timestamps, exact named constraints and server defaults. No
+  independent engine, ORM base, migration, reflection or partial production
+  businesses model was introduced. The FK references the existing business
+  table. Runtime Core insert/select does not require a competing business
+  mapping; any future metadata DDL generation would require its real mapping.
+- supplier_contracts.py: frozen SupplierCreateData and detached
+  SupplierRecord, typed SupplierRepository port, and safe field errors.
+  The port follows Developer 1's trusted-session and atomic-method conventions
+  and uses the existing shared repository exception hierarchy.
+- supplier_repository.py: SQLAlchemySupplierRepository(session_factory)
+  implements create_supplier_atomic(actor=..., data=...) and
+  get_supplier(actor=..., supplier_id=...). The injected factory must return
+  a fresh idle SQLAlchemy Session, e.g. sessionmaker(bind=db.engine) inside
+  an app context. It owns each session/transaction, closes its sessions and
+  returns creation success only after commit. It rejects a caller's active
+  transaction without committing, rolling it back or closing it.
+- supplier_persistence.py: internal create_supplier(data, *, actor, scope,
+  repository) invokes the unchanged prepare_supplier_create before typed
+  SQL-limit validation and repository access. There is no HTTP wiring.
+
+Creation requires a trusted Owner with suppliers:manage. Lookup requires the
+existing role/grant checks for suppliers:view using the actor's own business
+and assigned branch context (Owner or permitted Branch Manager). Business
+identity always comes from the trusted actor. Every supplier read, including
+the read after insertion, predicates on both business ID and supplier ID.
+Foreign/missing IDs produce the same safe not-found error. No request-supplied
+business/status/ID/timestamps are supported. Only supplier rows are written.
+No update/delete/status-transition methods or normalization were introduced.
+
+Uniqueness is decided by the database, without a preflight name lookup or
+Python name folding. MySQL duplicate error 1062 is classified as a name
+conflict only for uq_suppliers_name; SQLite tests recognize that exact
+column-pair constraint. Other integrity/SQLAlchemy failures become generic
+persistence errors with suppressed SQL exception chaining. Failed insert,
+post-insert lookup and commit paths roll back; no success escapes them.
+
+**Validation compatibility:** the existing pure preparation/validation helpers
+remain unchanged. They deliberately do not enforce SQL sizes. The candidate
+typed write boundary adds the supplied VARCHAR character limits and the MySQL
+TEXT capacity of 65,535 UTF-8 bytes, counting the original untrimmed value.
+Invalid Unicode is rejected before database access. Missing optional values
+become SQL NULL; explicit NULL, empty and whitespace strings are preserved.
+The preparation helper rejects Python-whitespace-only names more strictly
+than SQL's space-based TRIM check; that existing behavior is preserved. Its
+basic email syntax check also remains in place. No application-level name
+collation is invented: utf8mb4_0900_ai_ci is case/accent insensitive and uses
+MySQL's comparison rules, which SQLite's default binary collation does not
+replicate.
+
+**Executed verification (existing BranchWise_INTEGRATION_VENV):**
+
+- Candidate supplier repository tests plus existing supplier preparation,
+  validation, provisional route and provisional integration tests: 163 passed.
+- Developer 1 permissions, session authentication, isolation, repository
+  contracts and database configuration tests: 199 passed.
+- Complete backend suite: 3887 passed.
+- Flask route map compared with the pre-change snapshot: 49 rules, unchanged;
+  /api/suppliers remains unregistered.
+- git diff --check: passed after implementation.
+
+tests/test_supplier_repository.py performs actual SQL insert/select/constraint
+and rollback checks against isolated disposable SQLite files across independent
+sessions. Test-only parent/sentinel tables verify foreign keys and absence of
+unrelated writes. Test metadata substitutes portable SQLite timestamp defaults
+and registers CHAR_LENGTH; SQLite's native primary/unique/non-null/check/FK
+constraints are exercised. SQL VARCHAR limits are tested at the typed adapter
+boundary, since SQLite does not enforce VARCHAR lengths. MySQL DDL compilation
+and Connector/Python error simulations are static/unit checks only.
+
+**Unverified:** no live MySQL integration, utf8mb4_0900_ai_ci comparison behavior,
+unsigned-range enforcement, DATETIME(6)/ON UPDATE execution, MySQL TEXT/VARCHAR
+storage behavior, concurrent duplicate insertion, or MySQL transaction behavior
+is claimed. No DDL was executed against an existing/shared/production database.
+
+**Remaining production blockers:** final schema-owner approval, isolated MySQL
+compatibility/concurrency verification, approved deployment/session/grant
+contracts and installation of persistent authentication/session/user-loader
+adapters. No supplier repository installer or production factory wiring was
+added. The existing unprotected provisional supplier Blueprint remains
+unregistered. BE-28 remains PARTIAL; no production Supplier API is enabled.
